@@ -1,5 +1,7 @@
 # Maria Inês Lopes dos Santos, 20231630
 
+Summary: The Decision Tree outperforms Logistic Regression, demonstrating better predictive performance on this dataset.
+
 # Baseline Predictive Pipeline -- ETAI
 
 This is the **starting point** for your semester project: a small but *complete* predictive pipeline -- every piece a real project needs (entry point, config, data loading, preprocessing, model, evaluation), just kept as simple as possible for now.
