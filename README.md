@@ -1,6 +1,19 @@
 # Maria Inês Lopes dos Santos, 20231630
 
-Summary: The Decision Tree outperforms Logistic Regression, demonstrating better predictive performance on this dataset.
+# Summary 2nd Practical Class
+
+Both models achieved similar performance, with the Logistic Regression slightly outperforming the Decision Tree in test accuracy.
+
+- Logistic Regression: 67.8% test accuracy, with a very small train–test gap of 0.1%, indicating good generalization.
+- Decision Tree: 66.8% test accuracy, with a train–test gap of 1.2%, also showing relatively little overfitting.
+
+The Decision Tree has higher recall for class 1 (0.65 vs. 0.60), meaning it identifies more of the actual reoffenders.
+Logistic Regression has a higher F1-score for class 0 (0.72 vs. 0.69), while the Decision Tree has a slightly higher F1-score for class 1 (0.64 vs. 0.63).
+For the main African-American group, the model's false-positive rate is 0.33 for Logistic Regression and 0.39 for the Decision Tree, compared with 0.44 for COMPAS in this test set.
+
+It is important to note that the Decision Tree results are based on a single parameter configuration (max_depth=5), and neither model was fine-tuned or optimized through hyperparameter search. Therefore, these results represent the performance of the specific configurations tested rather than the maximum possible performance of either model.
+
+Overall, the two models perform similarly, but Logistic Regression has the slightly higher overall test accuracy and a smaller train–test gap, while the Decision Tree provides somewhat higher recall for class 1.
 
 # Baseline Predictive Pipeline -- ETAI
 
