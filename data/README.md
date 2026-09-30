@@ -225,6 +225,10 @@ However, Week 3 represents an important methodological improvement. The pipeline
 
 Therefore, the main progress from Week 2 to Week 3 is **the quality and reliability of the pipeline and validation process**, rather than a substantial increase in predictive accuracy.
 
+### Week 3 - Improved Pipeline
+ HERE
+ 
+
 
 ## Fairness Evaluation
 
