@@ -17,31 +17,31 @@ The main goal is not only to build a predictive model, but also to make the pipe
 ```text
 .
 ├── .gitignore
-├── config.yaml                   # Configurable settings
-├── main.py                      # Entry point: runs the complete pipeline
-├── requirements.txt             # Python dependencies
+├── config.yaml                 # Configurable settings
+├── main.py                     # Entry point: runs the complete pipeline
+├── requirements.txt           # Python dependencies
+│
+├── Classes/                    # Course/lab notebooks organized by week
+│   ├── W3_Notebooks/
+│   │   
+│   └── W4_Notebooks/
 │
 ├── data/
 │   ├── compas_two_year_recidivism.csv
-│   └── README.md                # Dataset description and data dictionary
+│   └── README.md              # Dataset description and data dictionary
 │
-├── results/                     # Generated results from pipeline runs
+├── results/                   # Generated results from pipeline runs
 │
 ├── src/
 │   ├── __init__.py
-│   ├── data.py                  # Data loading
-│   ├── data_diagnostics.py      # Data quality and diagnostic checks
-│   ├── evaluate.py              # Model evaluation and fairness checks
-│   ├── model.py                 # Model construction
-│   ├── preprocessing.py         # Data cleaning and preprocessing pipeline
-│   └── results.py               # Saves results from each run
+│   ├── data.py                # Data loading
+│   ├── data_diagnostics.py    # Data quality and diagnostic checks
+│   ├── evaluate.py            # Model evaluation and fairness checks
+│   ├── model.py               # Model construction
+│   ├── preprocessing.py       # Data cleaning and preprocessing pip
+│   └── results.py             # Saves results from each run
 │
-├── venv/                        # Virtual environment (ignored by Git)
-│
-└── W3_Notebooks/                # Exploratory notebooks and lab materials
-    ├── data/
-    ├── 01_eda_introduction.ipynb
-    └── 02_preprocessing.ipynb
+└── venv/                      # Virtual environment (ignored by Git)
 ```
 
 ## Pipeline Progress
@@ -52,6 +52,7 @@ The pipeline is being improved incrementally throughout the practical classes.
 | ----- | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **2** | Introduction and baseline         | Created the initial end-to-end pipeline, including data loading, basic preprocessing, train/test split, Logistic Regression baseline, accuracy evaluation, train/test comparison, and an initial fairness check using false-positive rates by race.      |
 | **3** | EDA, preprocessing and validation | Added data diagnostics, improved missing-value handling, domain-rule checks, duplicate removal, category standardisation, leak-safe preprocessing, redundant-feature removal, empirical preprocessing selection, and 5-fold stratified cross-validation. |
+| **4** | Model comparison and validation | Changed the selected scaler from Robust Scaling to Standard Scaling, evaluated Decision Tree, Random Forest, Logistic Regression and a Dummy baseline using the same 5-fold stratified cross-validation procedure, and extended the fairness analysis to out-of-fold predictions across the full development set. |
 
 ### Week 2 - Baseline
 
@@ -82,6 +83,23 @@ The main changes were:
 * Identified and removed redundant features using correlation and VIF.
 * Empirically compared different encoder/scaler combinations.
 * Added 5-fold stratified cross-validation to assess model stability.
+
+### Week 4 - Model Comparison and Cross-Validation
+
+Week 4 extended the evaluation beyond a single model and made cross-validation the main basis for comparing the candidate models.
+
+The main changes were:
+
+* Changed the selected scaler from Robust Scaling to Standard Scaling.
+* Evaluated four models using the same preprocessing and validation procedure: Decision Tree, Random Forest, Logistic Regression, and Dummy Classifier baseline
+* Used 5-fold stratified cross-validation with accuracy as the main comparison metric.
+* Reported the mean and standard deviation of training and validation accuracy across folds.
+* Calculated the mean train-validation gap to assess possible overfitting.
+* Generated out-of-fold predictions for the complete development set.
+* Extended the fairness analysis to the out-of-fold predictions rather than relying on a single train/test split.
+* Kept the test set locked and unevaluated during model selection.
+
+This change makes the model comparison less dependent on the particular rows that happen to appear in a single validation split.
 
 ## Preprocessing
 
@@ -142,22 +160,35 @@ The best-performing combination in this experiment was:
 
 However, the paired comparison with the runner-up showed that the difference was within the variation observed across the repeated splits. Therefore, the selected preprocessing combination should not be interpreted as definitively superior.
 
+During Week 4, the scaler used in the pipeline was changed from Robust Scaling to Standard Scaling. The results below allow the effect of this change to be assessed together with the updated cross-validation procedure.
+
 The full comparison and paired analysis are available in `02_preprocessing.ipynb`.
 
-## Model and Validation
+## Models and Validation
 
-The current pipeline uses a **Decision Tree** model.
+From Week 4 onwards, the pipeline evaluates four models using the same development set and 5-fold stratified cross-validation:
 
-The model is evaluated using:
+* Decision Tree
+* Random Forest
+* Logistic Regression
+* Dummy Classifier baseline
 
-* Test accuracy
-* Balanced accuracy
-* ROC-AUC
-* Classification report
-* Train/test performance comparison
-* 5-fold stratified cross-validation
+The Dummy Classifier uses the most_frequent strategy and provides a reference point for interpreting the performance of the trained models.
 
-The use of cross-validation provides a more reliable estimate of model stability than relying only on a single train/test split.
+The main validation metric for Week 4 is accuracy.
+
+For each model, the pipeline reports:
+
+* Training accuracy for each fold
+* Validation accuracy for each fold
+* Mean training accuracy
+* Mean validation accuracy
+* Standard deviation of validation accuracy
+* Mean train-validation gap
+* Classification report from out-of-fold predictions
+* False-positive rate by race from out-of-fold predictions
+
+The development set contains 5,771 rows. A separate 1,443-row test set remains locked and is not used during model selection.
 
 ## Results
 
@@ -225,20 +256,50 @@ However, Week 3 represents an important methodological improvement. The pipeline
 
 Therefore, the main progress from Week 2 to Week 3 is **the quality and reliability of the pipeline and validation process**, rather than a substantial increase in predictive accuracy.
 
-### Week 4 - Improved Pipeline
- HERE
- 
+### Week 4 - Model Comparison
 
+Week 4 uses 5-fold stratified cross-validation with accuracy as the main metric. The same validation procedure was applied to all four candidate models.
+
+| Model | Mean Train Accuracy | Train SD | Mean Validation Accuracy | Validation SD | Mean Gap |
+|---|---:|---:|---:|---:|---:|
+| Decision Tree | 68.4% | 0.5% | 67.4% | 1.8% | +1.0% |
+| Random Forest | 69.0% | 0.5% | 68.0% | 1.5% | +1.0% |
+| Logistic Regression | 67.5% | 0.3% | 67.2% | 1.3% | +0.3% |
+| Dummy Classifier | 54.9% | 0.0% | 54.9% | 0.0% | 0.0% |
+
+The three trained models have similar classification behaviour. In particular, all three identify class 0 more successfully than class 1, with class 1 recall ranging from 0.51 to 0.54.
+
+The Dummy Classifier illustrates why accuracy alone should not be interpreted without considering the class distribution: although it obtains 54.9% accuracy, it predicts only class 0 and therefore has 0.00 recall for class 1.
+ 
+### Week 3 vs Week 4
+
+The Decision Tree provides the most direct comparison between the two weeks:
+
+| Metric | Week 3 | Week 4 |
+|---|---|---|
+| CV Mean Accuracy | **67.8%** | **67.4%** |
+| CV Accuracy SD | 1.3% | 1.8% |
+| Validation Procedure | 5-fold stratified CV | 5-fold stratified CV |
+| Scaler | Previous configuration | **Standard Scaling** |
+| Models Evaluated | Decision Tree | DT, RF, LR, Dummy |
+
+The Week 4 Decision Tree did not improve mean cross-validation accuracy, decreasing slightly from 67.8% to 67.4%. Therefore, Standard Scaling should not be described as an accuracy improvement.
+
+Instead, Week 4 provides a more systematic comparison of four models using the same 5-fold stratified cross-validation procedure. The Random Forest achieved the highest mean validation accuracy at 68.0%, but the differences between the Decision Tree, Logistic Regression, and Random Forest were small.
+
+Overall, Week 4 suggests that predictive accuracy remained around 67–68%. The main improvement was the more reliable and fair evaluation using 5-fold cross-validation and Out-of-Fold predictions, showing that the baseline results were stable rather than dependent on a single data split.
 
 ## Fairness Evaluation
 
 Fairness is evaluated using **false-positive rate (FPR) by race**.
 
-The analysis compares the model's FPR with the corresponding FPR observed for COMPAS on the test data.
+The analysis compares the model's FPR with the corresponding FPR observed for COMPAS.
 
-This provides an initial view of whether the model's errors differ across racial groups.
+For Week 4, FPR is calculated from out-of-fold predictions on the complete 5,771-row development set. This means that every development observation receives a prediction from a model that was trained without that observation being included in the corresponding training fold.
 
-Fairness analysis is treated as a separate part of the evaluation rather than being reduced to a single overall performance metric. Further analysis may be added as the project develops.
+This provides a more robust fairness evaluation than calculating the metric from a single validation split.
+
+The results should still be interpreted carefully, particularly for groups with very small sample sizes.
 
 ## Running the Pipeline
 
@@ -300,10 +361,12 @@ The pipeline will:
 2. Run data diagnostics.
 3. Clean and preprocess the data.
 4. Split the data into training and test sets.
-5. Train the model.
-6. Evaluate predictive performance.
-7. Perform the fairness analysis.
-8. Save the results to `results/`.
+5. Perform 5-fold stratified cross-validation on the development set.
+6. Train and evaluate the configured models.
+7. Generate out-of-fold predictions.
+8. Perform the fairness analysis.
+9. Refit the configured final model on the complete development set.
+10. Save the results to results/.
 
 ## Troubleshooting
 
@@ -391,8 +454,3 @@ The project has progressed from a simple baseline predictive pipeline to a more 
 * Initial fairness evaluation
 
 Future practical classes will continue to build on this pipeline.
-
-
-
-
-

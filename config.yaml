@@ -85,15 +85,15 @@ preprocessing:
 model: 
   # Available models: "decision_tree", "random_forest", "logistic_regression", "dummy"
   
-  type: "decision_tree"
+  type: "dummy"  
   
   params:
   
     # DECISION TREE
-    max_depth: 5
-    random_state: 42
-    min_samples_leaf: 10 #opt
-    min_samples_split: 20 #opt
+    #max_depth: 5
+    #random_state: 42
+    #min_samples_leaf: 10 #opt
+    #min_samples_split: 20 #opt
 
     # RANDOM FOREST
     #n_estimators: 100
@@ -107,8 +107,8 @@ model:
     #random_state: 42
 
     # DUMMY MODEL
-    #strategy: "most_frequent"  # "stratified", "uniform", "constant"
-    #random_state: 42
+    strategy: "most_frequent"  # "stratified", "uniform", "constant"
+    random_state: 42
 
 output:
   results_dir: "results"   

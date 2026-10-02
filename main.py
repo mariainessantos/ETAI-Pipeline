@@ -20,7 +20,7 @@ from sklearn.pipeline import Pipeline
 from src.data import load_data 
 from src.preprocessing import ( clean_dataset, split_features_target, build_preprocessor, split_dev_test, drop_duplicate_rows, ) 
 from src.model import build_model 
-from src.evaluate import ( evaluate, fairness_report, cv_report, oof_classification_report, cross_validate_pipeline, ) 
+from src.evaluate import (fairness_report, cv_report, oof_classification_report, cross_validate_pipeline, ) 
 from src.results import save_run
 
 
