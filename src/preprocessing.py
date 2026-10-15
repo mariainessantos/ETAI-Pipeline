@@ -80,6 +80,46 @@ def clean_dataset(df: pd.DataFrame, diagnostics_config: dict) -> pd.DataFrame:
 
     return out
 
+def add_engineered_features(df):
+    """Create deterministic features from existing offense-history columns."""
+    out = df.copy()
+
+    juvenile_cols = [
+        "juv_fel_count",
+        "juv_misd_count",
+        "juv_other_count",
+    ]
+    available_juvenile_cols = [
+        col for col in juvenile_cols if col in out.columns
+    ]
+
+    # total juvenile offenses
+    if len(available_juvenile_cols) == len(juvenile_cols):
+        out["juvenile_total_count"] = out[juvenile_cols].sum(
+            axis=1, min_count=len(juvenile_cols)
+        )
+
+    # both juvenile-offense history and prior offenses.
+    if (
+        "priors_count" in out.columns
+        and len(available_juvenile_cols) == len(juvenile_cols)
+    ):
+        priors = pd.to_numeric(out["priors_count"], errors="coerce")
+        juvenile_known = out[juvenile_cols].notna().all(axis=1)
+        priors_known = priors.notna()
+        known = juvenile_known & priors_known
+
+        overlap = pd.Series(np.nan, index=out.index, dtype=float)
+        juvenile_history = out[juvenile_cols].gt(0).any(axis=1)
+
+        overlap.loc[known] = (
+            (priors.loc[known] > 0)
+            & juvenile_history.loc[known]
+        ).astype(int)
+
+        out["prior_juvenile_overlap"] = overlap
+
+    return out
 
 def drop_duplicate_rows(df: pd.DataFrame, id_column: str = None) -> pd.DataFrame:
     """

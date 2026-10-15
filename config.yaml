@@ -74,7 +74,7 @@ preprocessing:
   encoder: "target"      
   # options: "none" | "standard" | "minmax" | "robust"
   scaler: "standard" # "robust"      
-  numeric_features: ["age", "juv_fel_count", "juv_misd_count", "juv_other_count", "priors_count"]
+  numeric_features: ["age", "juv_fel_count", "juv_misd_count", "juv_other_count", "priors_count", "juvenile_total_count","prior_juvenile_overlap"]
   categorical_features: ["sex", "age_cat", "c_charge_degree"]
   mnar_indicator_sources: ["priors_count", "c_charge_degree"]
   random_state: 42
@@ -85,7 +85,7 @@ preprocessing:
 model: 
   # Available models: "decision_tree", "random_forest", "logistic_regression", "dummy"
   
-  type: "dummy"  
+  type: "adaboost"  
   
   params:
   
@@ -102,13 +102,67 @@ model:
     #random_state: 42
 
     # LOGISTIC REGRESSION
-    #max_iter: 1000
-    #C: 1.0
+    #max_iter: 2000
     #random_state: 42
 
     # DUMMY MODEL
-    strategy: "most_frequent"  # "stratified", "uniform", "constant"
+    #strategy: "most_frequent"  # "stratified", "uniform", "constant"
+    #random_state: 42
+
+    # ADABOOST
+    n_estimators: 100
+    learning_rate: 0.1
+    max_depth: 3
     random_state: 42
+
+tuning:
+  enabled: true
+  n_trials: 10
+  n_splits: 3
+  random_state: 42
+  search_space:
+    logistic_regression:
+      model__C:
+        type: float
+        low: 0.01
+        high: 10.0
+        log: true
+    
+    random_forest:
+      model__n_estimators:
+        type: int
+        low: 100
+        high: 400
+      model__max_depth:
+        type: categorical
+        choices: [null, 5, 10, 15, 20]
+      model__min_samples_split:
+        type: int
+        low: 2
+        high: 20
+      model__min_samples_leaf:
+        type: int
+        low: 1
+        high: 10
+      model__max_features:
+        type: categorical
+        choices: ["sqrt", "log2"]
+
+    adaboost:
+      model__n_estimators:
+        type: int
+        low: 50
+        high: 300
+      model__learning_rate:
+        type: float
+        low: 0.01
+        high: 1.0
+        log: true
+      model__estimator__max_depth:
+        type: int
+        low: 1
+        high: 3
+
 
 output:
   results_dir: "results"   

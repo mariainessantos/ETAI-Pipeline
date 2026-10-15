@@ -17,7 +17,7 @@ from sklearn.metrics import ( balanced_accuracy_score, confusion_matrix, )
 from sklearn.model_selection import ( StratifiedKFold, ) 
 from sklearn.pipeline import Pipeline 
 from src.data import load_data 
-from src.preprocessing import ( clean_dataset, split_features_target, build_preprocessor, split_dev_test, drop_duplicate_rows, ) 
+from src.preprocessing import ( clean_dataset, split_features_target, build_preprocessor, split_dev_test, drop_duplicate_rows, add_engineered_features, ) 
 from src.model import build_model, build_pipeline
 from src.evaluate import (fairness_report, cv_report, oof_classification_report, cross_validate_pipeline, ) 
 from src.results import save_run
@@ -38,6 +38,7 @@ def main():
     df_raw = load_data(config["data"]["path"])
     df_clean = clean_dataset(df_raw, config["diagnostics"])
     df_clean = drop_duplicate_rows(df_clean, config["diagnostics"].get("id_column"))
+    df_clean = add_engineered_features(df_clean)
 
     # SPLIT FEATURES + TARGET
 
@@ -101,36 +102,30 @@ def main():
         inner_cv = StratifiedKFold(n_splits=tuning_config["n_splits"], shuffle=True, random_state=tuning_seed,)
 
         print(
-        f"\nNested cross-validation: "
-        f"{cv.get_n_splits()} outer folds x "
-        f"{n_trials} trials x "
-        f"{inner_cv.get_n_splits()} inner folds ..."
+            f"\nNested cross-validation: "
+            f"{cv.get_n_splits()} outer folds x "
+            f"{n_trials} trials x "
+            f"{inner_cv.get_n_splits()} inner folds ..."
         )
 
         nested_scores, y_oof = nested_cross_validate(
-        pipeline,
-        X_dev,
-        y_dev,
-        cv,
-        inner_cv,
-        scoring,
-        search_space,
-        n_trials,
-        tuning_seed,
-        n_jobs=n_jobs,
+            pipeline,
+            X_dev,
+            y_dev,
+            cv,
+            inner_cv,
+            scoring,
+            search_space,
+            n_trials,
+            tuning_seed,
+            n_jobs=n_jobs,
         )
 
         report += (
-        "\n\nNested cross-validation "
-        "(honest evaluation of the tuning procedure):\n"
+            "\n\nNested cross-validation "
+            "(honest evaluation of the tuning procedure):\n"
         )
         report += cv_report(nested_scores, scoring)
-
-        report += "\n\n" + tuning_report(
-            study,
-            nested_scores,
-            scoring,
-        )
 
         pipeline, study = tune_pipeline(
             pipeline,
@@ -151,10 +146,6 @@ def main():
         )
 
     else:
-    # Without tuning, obtain out-of-fold predictions from
-    # the standard cross-validation procedure.
-    # Assumes the existing evaluation code provides y_oof.
-    # If it does not, generate it using cross_val_predict.
         pass
 
     # CLASSIFICATION + FAIRNESS REPORTS
