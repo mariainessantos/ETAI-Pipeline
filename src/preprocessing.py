@@ -1,21 +1,11 @@
 """
-Preprocessing -- raw data in, model-ready data out: category cleanup, domain-rule/
-placeholder -> NaN conversion, de-duplication, mechanism-matched imputation, a
-leak-safe/deployable encoder/scaler pipeline, and the split that sets the final test
-set aside. One file, one obvious place to look for "how does raw data become model-ready."
+Preprocessing: rule-based cleaning, training-only de-duplication, the feature/target split,
+the leak-safe preprocessor and the development/test split.
 
-See Practical/W4/notebooks/02_preprocessing.ipynb for the full walkthrough, and
-03_cross_validation.ipynb for why the split below now creates a *locked* test set.
+`clean_dataset` and `split_features_target` learn nothing from the data, so they are safe on
+any rows, including label-free data to predict. Everything learned from data (imputation,
+encoding, scaling) lives in `build_preprocessor`, inside the model Pipeline.
 
-Two things every function here respects, on purpose:
-  - leak-safe: `clean_dataset` and `split_features_target` learn nothing from the data
-    (no means, no category lists, no target), so they're safe to run on the whole
-    dataset. Everything that *is* learned from data -- imputation, encoding, scaling --
-    lives inside `build_preprocessor`'s ColumnTransformer, which sits inside the model's
-    sklearn Pipeline. That means it gets re-fit on the training part of every CV fold,
-    and never sees the validation fold or the locked test set.
-  - deployable from day one: nothing before the split needs the target column --
-    `y` comes back as `None` on label-free inference data, and nothing breaks.
 """
 import numpy as np
 import pandas as pd
@@ -138,12 +128,7 @@ def split_features_target(df: pd.DataFrame, data_config: dict, mnar_indicator_so
 
 
 _SCALERS = {"none": "passthrough", "standard": StandardScaler, "minmax": MinMaxScaler, "robust": RobustScaler}
-# Each entry takes a random_state (only the target encoder actually uses it).
-# Target encoding uses sklearn's TargetEncoder (new in week 4, replacing category_encoders'):
-# during fit it *cross-fits* -- each training row is encoded with category means computed
-# on the OTHER internal folds, never on its own label. Without that, a row's own target
-# leaks into its own feature value, and the model learns to trust the encoding more than
-# it deserves. Unseen categories at predict time get the overall target mean.
+
 _ENCODERS = {
     "onehot": lambda seed: OneHotEncoder(handle_unknown="ignore", sparse_output=False),
     "ordinal": lambda seed: OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1),
@@ -161,16 +146,10 @@ def build_preprocessor(preprocessing_config: dict) -> ColumnTransformer:
     training part of each CV fold only, because this object is placed *inside* the
     model's sklearn Pipeline (see main.py).
     """
-    encoder_name = preprocessing_config["encoder"]
-    scaler_name = preprocessing_config["scaler"]
-    numeric_features = preprocessing_config["numeric_features"]
-    categorical_features = preprocessing_config["categorical_features"]
-    mnar_indicator_sources = preprocessing_config.get("mnar_indicator_sources", [])
     imputation = preprocessing_config.get("imputation", {})
-
-    scaler_factory = _SCALERS[scaler_name]
+    scaler_factory = _SCALERS[preprocessing_config["scaler"]]
     scaler = scaler_factory() if callable(scaler_factory) else scaler_factory
-    encoder = _ENCODERS[encoder_name](preprocessing_config.get("random_state"))
+    encoder = _ENCODERS[preprocessing_config["encoder"]](preprocessing_config.get("random_state"))
 
     numeric_pipeline = Pipeline([
         ("impute", SimpleImputer(strategy=imputation.get("numeric_strategy", "median"))),
@@ -180,14 +159,14 @@ def build_preprocessor(preprocessing_config: dict) -> ColumnTransformer:
         ("impute", SimpleImputer(strategy=imputation.get("categorical_strategy", "most_frequent"))),
         ("encode", encoder),
     ])
-
-    indicator_cols = [f"{c}_was_missing" for c in mnar_indicator_sources]
+    indicator_cols = [f"{c}_was_missing" for c in preprocessing_config.get("mnar_indicator_sources", [])]
 
     return ColumnTransformer([
-        ("numeric", numeric_pipeline, numeric_features),
-        ("categorical", categorical_pipeline, categorical_features),
+        ("numeric", numeric_pipeline, preprocessing_config["numeric_features"]),
+        ("categorical", categorical_pipeline, preprocessing_config["categorical_features"]),
         ("indicators", "passthrough", indicator_cols),
     ])
+
 
 
 def split_dev_test(X, y, extras, test_size: float, random_state: int):
