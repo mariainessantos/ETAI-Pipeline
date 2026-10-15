@@ -15,33 +15,37 @@ The main goal is not only to build a predictive model, but also to make the pipe
 ## Project Structure
 
 ```text
+```text
 .
 ├── .gitignore
-├── config.yaml                 # Configurable settings
-├── main.py                     # Entry point: runs the complete pipeline
-├── requirements.txt           # Python dependencies
+├── config.yaml                  # Data, preprocessing, model and tuning settings
+├── main.py                      # Entry point for the complete pipeline
+├── requirements.txt             # Python dependencies
 │
-├── Classes/                    # Course/lab notebooks organized by week
+├── Classes/
 │   ├── W3_Notebooks/
-│   │   
-│   └── W4_Notebooks/
+│   |── W4_Notebooks/
+|   |── W5_Notebooks/
+│   └── W6_Notebooks/
 │
 ├── data/
 │   ├── compas_two_year_recidivism.csv
-│   └── README.md              # Dataset description and data dictionary
+│   └── README.md                # Dataset description and data dictionary
 │
-├── results/                   # Generated results from pipeline runs
+├── results/                     # Timestamped experiment reports
 │
 ├── src/
 │   ├── __init__.py
-│   ├── data.py                # Data loading
-│   ├── data_diagnostics.py    # Data quality and diagnostic checks
-│   ├── evaluate.py            # Model evaluation and fairness checks
-│   ├── model.py               # Model construction
-│   ├── preprocessing.py       # Data cleaning and preprocessing pip
-│   └── results.py             # Saves results from each run
+│   ├── data.py                  # Data loading
+│   ├── data_diagnostics.py      # Data quality checks
+│   ├── evaluate.py              # Cross-validation and fairness evaluation
+│   ├── model.py                 # Model construction
+│   ├── preprocessing.py         # Cleaning, feature engineering and preprocessing
+│   ├── results.py               # Saving experiment reports
+│   └── tuning.py                # Hyperparameter tuning and nested CV
 │
-└── venv/                      # Virtual environment (ignored by Git)
+└── venv/                        # Local virtual environment (ignored by Git)
+
 ```
 
 ## Pipeline Progress
@@ -53,6 +57,7 @@ The pipeline is being improved incrementally throughout the practical classes.
 | **2** | Introduction and baseline         | Created the initial end-to-end pipeline, including data loading, basic preprocessing, train/test split, Logistic Regression baseline, accuracy evaluation, train/test comparison, and an initial fairness check using false-positive rates by race.      |
 | **3** | EDA, preprocessing and validation | Added data diagnostics, improved missing-value handling, domain-rule checks, duplicate removal, category standardisation, leak-safe preprocessing, redundant-feature removal, empirical preprocessing selection, and 5-fold stratified cross-validation. |
 | **4** | Model comparison and validation | Changed the selected scaler from Robust Scaling to Standard Scaling, evaluated Decision Tree, Random Forest, Logistic Regression and a Dummy baseline using the same 5-fold stratified cross-validation procedure, and extended the fairness analysis to out-of-fold predictions across the full development set. |
+| **5 and 6** | Feature engineering, ensemble models and hyperparameter tuning | Added engineered features, expanded the model comparison to include AdaBoost, implemented Optuna-based hyperparameter tuning and nested cross-validation, and compared predictive performance and fairness across tuned models. |
 
 ### Week 2 - Baseline
 
@@ -101,6 +106,20 @@ The main changes were:
 
 This change makes the model comparison less dependent on the particular rows that happen to appear in a single validation split.
 
+### Weeks 5 and 6 - Feature Engineering, Ensemble Models and Hyperparameter Tuning
+
+This stage focused on improving the predictive pipeline through feature engineering, ensemble learning and systematic hyperparameter optimisation.
+
+The main changes were:
+
+* Feature engineering: Added juvenile_total_count, representing the combined juvenile offence counts, and prior_juvenile_overlap, indicating whether prior offences and juvenile offences are both present. The engineered features were incorporated into the existing preprocessing pipeline.
+
+* Ensemble models: Expanded the model factory to support Random Forest and AdaBoost alongside Logistic Regression and the existing baseline models.
+
+* Hyperparameter tuning: Integrated Optuna to search for promising model configurations using the development set.
+
+* Nested cross-validation: Added an outer five-fold evaluation procedure with three-fold inner cross-validation and ten Optuna trials per outer fold. This helps estimate the generalisation performance of the tuning procedure while reducing the optimism associated with selecting the best configuration from a hyperparameter search.
+
 ## Preprocessing
 
 The preprocessing decisions were based on the EDA performed in:
@@ -142,6 +161,16 @@ The following features were removed because they contained information already r
 
 The redundancy was identified using correlation analysis and VIF. In particular, `juvenile_total` was identified as an exact sum of other variables through the multicollinearity analysis.
 
+### Feature Engineering
+
+Two features were added:
+
+* juvenile_total_count: the sum of juv_fel_count, juv_misd_count and juv_other_count, preserving missingness when the required component values are incomplete.
+
+* prior_juvenile_overlap: an indicator of whether an individual has both a positive prior-offence count and at least one recorded juvenile offence, while preserving missingness when the required information is unavailable.
+
+These features were designed to represent combined juvenile offending history and the overlap between juvenile and prior offences. Their contribution should be assessed through validation rather than assumed to improve predictive performance.
+
 ## Encoder and Scaler Selection
 
 Different preprocessing combinations were compared empirically using Logistic Regression.
@@ -162,33 +191,40 @@ However, the paired comparison with the runner-up showed that the difference was
 
 During Week 4, the scaler used in the pipeline was changed from Robust Scaling to Standard Scaling. The results below allow the effect of this change to be assessed together with the updated cross-validation procedure.
 
-The full comparison and paired analysis are available in `02_preprocessing.ipynb`.
+## Hyperparameter Tuning and Validation
+
+Optuna was used to search the hyperparameter spaces defined in config.yaml. The three main candidate models in this experiment were Logistic Regression, Random Forest and AdaBoost.
+
+For each model, nested cross-validation used five outer folds, three inner folds and ten optimisation trials per outer fold. The outer validation folds provided the main estimate of generalisation performance, while the best Optuna score was treated as a tuning result rather than an unbiased performance estimate.
+
+After nested cross-validation, a separate search on the complete development set selected the configuration used to refit the final model. The locked test set was not used in either optimisation procedure.
 
 ## Models and Validation
 
-From Week 4 onwards, the pipeline evaluates four models using the same development set and 5-fold stratified cross-validation:
+The pipeline supports several models through a common preprocessing and evaluation workflow:
 
+* Logistic Regression
 * Decision Tree
 * Random Forest
-* Logistic Regression
+* AdaBoost
 * Dummy Classifier baseline
 
-The Dummy Classifier uses the most_frequent strategy and provides a reference point for interpreting the performance of the trained models.
+The Dummy Classifier provides a reference point for interpreting predictive accuracy. Random Forest and AdaBoost extend the comparison to ensemble learning, while Logistic Regression provides a simpler linear baseline.
 
-The main validation metric for Week 4 is accuracy.
+The pipeline uses stratified cross-validation to preserve the approximate class proportions across folds. During hyperparameter tuning, nested cross-validation separates the inner optimisation procedure from the outer performance evaluation.
 
-For each model, the pipeline reports:
+The reported metrics include:
 
-* Training accuracy for each fold
-* Validation accuracy for each fold
-* Mean training accuracy
-* Mean validation accuracy
-* Standard deviation of validation accuracy
-* Mean train-validation gap
-* Classification report from out-of-fold predictions
-* False-positive rate by race from out-of-fold predictions
+* Training and validation accuracy for each fold
+* Mean and standard deviation of training and validation accuracy
+* Mean train–validation gap
+* Out-of-fold precision, recall and F1-scores
+* Out-of-fold accuracy
+* False-positive rates by race
+* Optuna's selected hyperparameters and best inner cross-validation score
+* Nested cross-validation results
 
-The development set contains 5,771 rows. A separate 1,443-row test set remains locked and is not used during model selection.
+The development set contains 5,771 rows, while the separate test set contains 1,443 rows. The test set remains locked until the modelling and selection procedure is finalised.
 
 ## Results
 
@@ -289,17 +325,59 @@ Instead, Week 4 provides a more systematic comparison of four models using the s
 
 Overall, Week 4 suggests that predictive accuracy remained around 67–68%. The main improvement was the more reliable and fair evaluation using 5-fold cross-validation and Out-of-Fold predictions, showing that the baseline results were stable rather than dependent on a single data split.
 
-## Fairness Evaluation
+### Weeks 5 and 6 - Tuned MOdel Comparison
 
-Fairness is evaluated using **false-positive rate (FPR) by race**.
+The three candidate models were evaluated using the same five-fold outer cross-validation procedure, with three inner folds and ten Optuna trials per outer fold.
 
-The analysis compares the model's FPR with the corresponding FPR observed for COMPAS.
+| Metric | Logistic Regression | Random Forest | AdaBoost |
+|---|---:|---:|---:|
+| Initial five-fold CV accuracy | 67.2% | 67.3% | 68.2% |
+| Nested CV accuracy | 67.1% | 67.8% | 68.2% |
+| Nested CV accuracy SD | 1.5% | 1.4% | 1.5% |
+| Mean train–validation gap | +0.4% | +1.7% | +0.3% |
+| Out-of-fold class 1 F1-score | 0.57 | 0.61 | 0.61 |
+| Out-of-fold macro F1-score | 0.65 | 0.67 | 0.67 |
 
-For Week 4, FPR is calculated from out-of-fold predictions on the complete 5,771-row development set. This means that every development observation receives a prediction from a model that was trained without that observation being included in the corresponding training fold.
+The initial CV scores are from the configured model before tuning, while the nested CV results estimate the performance of the tuning procedure. The initial and nested CV results should therefore be interpreted as different stages of evaluation.
 
-This provides a more robust fairness evaluation than calculating the metric from a single validation split.
+The searches on the complete development set selected the following configurations:
 
-The results should still be interpreted carefully, particularly for groups with very small sample sizes.
+- **Logistic Regression:** `C ≈ 0.636`
+- **Random Forest:** 332 estimators, maximum depth 10, minimum samples split 16, minimum samples leaf 1, and `max_features="sqrt"`.
+- **AdaBoost:** 144 estimators, learning rate approximately 0.797, and base decision-tree depth 3.
+
+These configurations were selected by maximising the inner cross-validation accuracy in the corresponding Optuna searches. Their best scores are not substitutes for the nested cross-validation estimates.
+
+AdaBoost emerged as the strongest candidate in this experiment, offering the best overall balance between predictive performance and generalisation. Random Forest achieved comparable performance but exhibited a larger train–validation gap, while Logistic Regression provided a simpler alternative with relatively stable generalisation but slightly weaker predictive performance.
+
+Overall, the results suggest that ensemble methods are promising for this task, with AdaBoost emerging as the leading candidate. However, the performance differences between models are modest, and the test set has not yet been evaluated. 
+
+### Week 4 vs Weeks 5 and 6
+
+Week 4's Random Forest achieved approximately 68.0% mean validation accuracy using standard five-fold cross-validation. In Week 6, feature engineering was introduced by adding juvenile_total_count and prior_juvenile_overlap, alongside Optuna-based hyperparameter tuning and nested cross-validation. The tuned Random Forest achieved 67.8% nested CV accuracy, while AdaBoost achieved 68.2%.
+
+The Week 4 and Week 6 figures use different evaluation procedures, so these differences should not be interpreted as perfectly controlled improvements attributable to feature engineering or hyperparameter tuning alone. Nevertheless, Week 6 represents an important methodological improvement by combining feature engineering, ensemble models, systematic hyperparameter optimisation and nested cross-validation to support a more robust model comparison.
+
+## Fairness Analysis
+
+Fairness is assessed by comparing the false-positive rate (FPR) of each model across racial groups with the FPR observed for COMPAS's own score.
+
+The FPR measures the proportion of individuals who did not reoffend but were predicted as positive. It is therefore one useful measure of potential disparities in risk classification, although it does not capture every dimension of fairness.
+
+For the tuned model comparison, FPR was calculated from out-of-fold predictions across the 5,771-row development set.
+
+The results showed that all three candidate models had lower FPRs than COMPAS for African-American individuals:
+
+| Model | African-American FPR | Caucasian FPR | Hispanic FPR |
+|:---|---:|---:|---:|
+| COMPAS | 0.45 | 0.23 | 0.23 |
+| Logistic Regression | **0.25** | **0.11** | 0.15 |
+| Random Forest | 0.30 | 0.16 | 0.17 |
+| AdaBoost | 0.28 | 0.14 | **0.15** |
+
+These comparisons suggest that the models reduce false-positive rates for several groups relative to COMPAS, although the extent of the reduction differs across models and groups. Logistic Regression had the lowest FPR for the African-American and Caucasian groups in this comparison, while AdaBoost offered the highest nested CV accuracy.
+
+Fairness should not be judged using FPR alone. The analysis must also consider recall, precision, group sample sizes and other potential sources of disparity. In particular, estimates for Asian and Native American individuals are uncertain because those groups contain very few observations in the development set. The fairness results are therefore descriptive and should not be interpreted as proof that any model is fair overall.
 
 ## Running the Pipeline
 
@@ -436,21 +514,22 @@ data/README.md
 
 ## Project Status
 
-**Current stage: Week 3**
+**Current stage: Week 6 - Feature Engineering, Ensemble Models and Hyperparameter Tuning**
 
-The project has progressed from a simple baseline predictive pipeline to a more robust pipeline with:
+The project has progressed from a simple baseline to a more comprehensive predictive pipeline incorporating:
 
-* Data diagnostics
-* Improved missing-value handling
-* Invalid-value detection
-* Category standardisation
-* Duplicate removal
-* Redundant-feature removal
-* Leak-safe preprocessing
-* Empirical preprocessing selection
-* Decision Tree modelling
-* 5-fold stratified cross-validation
-* Predictive performance evaluation
-* Initial fairness evaluation
+* Data diagnostics and domain-based validity checks
+* Improved missing-value handling and missingness indicators
+* Category standardisation and duplicate removal
+* Redundant-feature analysis and removal
+* Leak-safe preprocessing and empirical encoder/scaler selection
+* Engineered juvenile-offence features
+* Logistic Regression, Decision Tree, Random Forest and AdaBoost models
+* A Dummy Classifier reference baseline
+* Five-fold stratified cross-validation
+* Optuna-based hyperparameter tuning
+* Nested cross-validation for evaluating the tuning procedure
+* Out-of-fold classification and fairness evaluation
+* Timestamped experiment reports for reproducibility
 
 Future practical classes will continue to build on this pipeline.
