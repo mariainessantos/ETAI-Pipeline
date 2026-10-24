@@ -11,8 +11,7 @@ load config -> load and clean data -> drop duplicate rows -> engineer features
 -> refit on all development rows -> scoreboard + save report
 
 """
-import datetime
-
+from datetime import datetime 
 import optuna
 import yaml 
 from sklearn.metrics import ( balanced_accuracy_score, confusion_matrix, ) 
@@ -21,7 +20,7 @@ from sklearn.pipeline import Pipeline
 from src.data import load_data 
 from src.preprocessing import ( clean_dataset, split_features_target, build_preprocessor, split_dev_test, drop_duplicate_rows, add_engineered_features, ) 
 from src.model import build_model, build_pipeline
-from src.evaluate import (build_scores, cross_validate_pipeline, fairness_report, cv_report, oof_classification_report, ) 
+from src.evaluate import (build_scorers, cross_validate_pipeline, fairness_report, cv_report, oof_classification_report, ) 
 from src.results import save_run, save_scores
 from src.tuning import nested_cross_validate, tune_pipeline, tuning_report
 
@@ -72,7 +71,7 @@ def main():
 
     metrics = cv_config["metrics"]
     selection_metric = cv_config["selection_metric"]
-    scoreres = build_scores(metrics)
+    scorers = build_scorers(metrics)
 
     n_jobs = cv_config.get("n_jobs", 1)
 
@@ -111,7 +110,6 @@ def main():
     floor = floor_scores["validation"].mean()
     untuned = fold_scores["validation"].mean()
 
-    # NEW: default-model results and comparison with the no-model floor
     print("\nDefault hyperparameters (config.yaml)")
     print(
         f"  {selection_metric}: "
@@ -135,7 +133,6 @@ def main():
           f"{selection_metric} = {floor:.3f}"
     )
 
-    # The scores used for the final report and scoreboard
     final_scores = fold_scores
 
     # HYPERPARAMETER TUNING (OPTIONAL)
@@ -144,15 +141,14 @@ def main():
     tuning_enabled = tuning_config.get("enabled", False)
     study = None
 
-    if tuning_enabled:
-        # CHANGED: match the professor's config.yaml structure
-        search_spaces = tuning_config.get("search_spaces") or {}
-
-        if model_type not in search_spaces:
-            raise ValueError(
-                "Tuning is enabled but config.yaml has no "
-                f"tuning.search_spaces entry for '{model_type}'."
-            )
+    search_spaces = tuning_config.get("search_spaces", {})
+    tuning_enabled = (
+        tuning_config.get("enabled", False) and model_type in search_spaces
+    )
+    if tuning_config.get("enabled", False) and model_type not in search_spaces:
+        print(
+        f"No tuning search space for '{model_type}'. "
+        "Running untuned cross-validation only.")
 
         search_space = search_spaces[model_type]
         n_trials = tuning_config["n_trials"]
@@ -172,7 +168,6 @@ def main():
             f"{n_trials} Optuna trials"
         )
 
-        # CHANGED: nested CV evaluates the tuning procedure honestly
         final_scores, y_oof = nested_cross_validate(
             pipeline,
             X_dev,
@@ -204,7 +199,6 @@ def main():
             )
         )
 
-        # Tune once on all development rows for the final model
         pipeline, study = tune_pipeline(
             pipeline,
             X_dev,
@@ -229,7 +223,6 @@ def main():
             study, final_scores, selection_metric
         )
 
-    # NEW: report all configured metrics, not only the selection metric
     print(
         f"\nAll metrics "
         f"({'tuned model' if tuning_enabled else 'default model'}, "
@@ -254,14 +247,15 @@ def main():
     )
 
     # Keep your additional confusion-matrix report
-    cm = confusion_matrix(y_dev, y_oof)
+    y_oof_pred = (y_oof >= 0.5).astype(int)
+    cm = confusion_matrix(y_dev, y_oof_pred)
     report += "\n\nConfusion matrix (out-of-fold predictions):"
     report += "\n Predicted"
     report += "\n          0       1"
     report += f"\nActual 0  {cm[0, 0]:<7} {cm[0, 1]}"
     report += f"\nActual 1  {cm[1, 0]:<7} {cm[1, 1]}"
 
-    balanced_acc = balanced_accuracy_score(y_dev, y_oof)
+    balanced_acc = balanced_accuracy_score(y_dev, y_oof_pred)
     report += f"\n\nOOF balanced accuracy: {balanced_acc:.3f}"
 
     # REFIT ON ALL DEVELOPMENT ROWS
@@ -283,7 +277,7 @@ def main():
     print(locked)
     report += "\n" + locked + "\n"
 
-    # NEW: SAVE RUN TO SCOREBOARD
+    # SAVE RUN TO SCOREBOARD
 
     row = {
         "run": run,
@@ -294,7 +288,7 @@ def main():
         "scaler": config["preprocessing"]["scaler"],
         "params": str(config["model"].get("params")),
         "tuned_params": (
-            str(study.best_params) if tuning_enabled else ""
+            str(study.best_params) if study is not None else "" 
         ),
         "metric": selection_metric,
         "mean": final_scores["validation"].mean(),

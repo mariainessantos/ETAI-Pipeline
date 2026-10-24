@@ -5,7 +5,6 @@ Writes each run's full report to a timestamped file in results/,
 and appends a summary row to a CSV scoreboard for comparing runs.
 
 """
-from asyncio import run
 import os
 from datetime import datetime
 import pandas as pd
@@ -29,16 +28,15 @@ def save_scores(path: str, row: dict) -> pd.DataFrame:
 
     return runs
 
-def save_run(results_dir: str, config: dict, report_text: str) -> str:
+def save_run(results_dir: str, run_id: str, config: dict, report_text: str) -> str:
     """
     Writes the run's settings and full report to `results_dir/run_<timestamp>.txt` (the
     folder is created if needed) and returns the path.
     """
     os.makedirs(results_dir, exist_ok=True)
 
-    run_id = str(run) if run is not None else datetime.now().strftime(
-        "%Y%m%d_%H%M%S"
-    )
+    if not run_id:
+        run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
     
     path = os.path.join(results_dir, f"run_{run_id}.txt")
 

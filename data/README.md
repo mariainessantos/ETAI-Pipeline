@@ -15,7 +15,6 @@ The main goal is not only to build a predictive model, but also to make the pipe
 ## Project Structure
 
 ```text
-```text
 .
 ├── .gitignore
 ├── config.yaml                  # Data, preprocessing, model and tuning settings
@@ -58,6 +57,7 @@ The pipeline is being improved incrementally throughout the practical classes.
 | **3** | EDA, preprocessing and validation | Added data diagnostics, improved missing-value handling, domain-rule checks, duplicate removal, category standardisation, leak-safe preprocessing, redundant-feature removal, empirical preprocessing selection, and 5-fold stratified cross-validation. |
 | **4** | Model comparison and validation | Changed the selected scaler from Robust Scaling to Standard Scaling, evaluated Decision Tree, Random Forest, Logistic Regression and a Dummy baseline using the same 5-fold stratified cross-validation procedure, and extended the fairness analysis to out-of-fold predictions across the full development set. |
 | **5 and 6** | Feature engineering, ensemble models and hyperparameter tuning | Added engineered features, expanded the model comparison to include AdaBoost, implemented Optuna-based hyperparameter tuning and nested cross-validation, and compared predictive performance and fairness across tuned models. |
+| **7** | Model comparison, nested tuning and model selection | Expanded the comparison to include Naive Bayes, Gradient Boosting and HistGradientBoosting, alongside the previously evaluated models. Used ROC-AUC as the primary selection metric, compared untuned and tuned performance using nested cross-validation where tuning is available, and included a Dummy Classifier floor as a baseline. Continued to keep the test set locked during model selection. |
 
 ### Week 2 - Baseline
 
@@ -119,6 +119,22 @@ The main changes were:
 * Hyperparameter tuning: Integrated Optuna to search for promising model configurations using the development set.
 
 * Nested cross-validation: Added an outer five-fold evaluation procedure with three-fold inner cross-validation and ten Optuna trials per outer fold. This helps estimate the generalisation performance of the tuning procedure while reducing the optimism associated with selecting the best configuration from a hyperparameter search.
+
+### Week 7 - Hyperparameter Optimisation and Model Evaluation
+
+In Week 7, I expanded the model comparison by introducing additional classification algorithms and evaluating their performance using ROC-AUC as the primary model-selection metric.
+
+The main developments were:
+
+* Expanded model comparison: Added Naive Bayes, Gradient Boosting and HistGradientBoosting to the existing set of models, which already included Logistic Regression, Decision Tree, Random Forest and AdaBoost. A Dummy Classifier was retained as a baseline for comparison.
+
+* Gradient Boosting optimisation: Used Optuna to search for promising Gradient Boosting hyperparameter configurations and compared the tuned model's performance with its untuned version.
+
+* ROC-AUC-based evaluation: Adopted ROC-AUC as the primary model-selection metric and expanded the comparison to include accuracy, balanced accuracy, precision, recall, F1-score, F2-score and Average Precision.
+
+* Generalisation and overfitting analysis: Examined the differences between training and validation performance to identify models that may be overfitting. This highlighted the larger train-validation gaps observed for Decision Tree and Random Forest.
+
+ROC-AUC was selected as the primary model selection metric because the task is to predict two-year recidivism, and ROC-AUC measures how well a model distinguishes between the two outcome classes across classification thresholds. This allows candidate models to be compared without relying exclusively on a fixed threshold such as 0.5. 
 
 ## Preprocessing
 
@@ -207,6 +223,9 @@ The pipeline supports several models through a common preprocessing and evaluati
 * Decision Tree
 * Random Forest
 * AdaBoost
+* Naive Bayes
+* Gradient Boosting
+* HistGradientBoosting
 * Dummy Classifier baseline
 
 The Dummy Classifier provides a reference point for interpreting predictive accuracy. Random Forest and AdaBoost extend the comparison to ensemble learning, while Logistic Regression provides a simpler linear baseline.
@@ -357,6 +376,45 @@ Overall, the results suggest that ensemble methods are promising for this task, 
 Week 4's Random Forest achieved approximately 68.0% mean validation accuracy using standard five-fold cross-validation. In Week 6, feature engineering was introduced by adding juvenile_total_count and prior_juvenile_overlap, alongside Optuna-based hyperparameter tuning and nested cross-validation. The tuned Random Forest achieved 67.8% nested CV accuracy, while AdaBoost achieved 68.2%.
 
 The Week 4 and Week 6 figures use different evaluation procedures, so these differences should not be interpreted as perfectly controlled improvements attributable to feature engineering or hyperparameter tuning alone. Nevertheless, Week 6 represents an important methodological improvement by combining feature engineering, ensemble models, systematic hyperparameter optimisation and nested cross-validation to support a more robust model comparison.
+
+### Week 7
+
+This week focused on comparing the models using ROC-AUC as the primary selection metric. Unlike accuracy, ROC-AUC evaluates how well a model distinguishes between the two classes across different classification thresholds, making it useful when assessing performance on an imbalanced dataset.
+
+| Model | Mean ROC-AUC | Standard Deviation | Accuracy | F1-score | Average Precision |
+|---|---:|---:|---:|---:|---:|
+| AdaBoost | **0.727** | 0.014 | 0.682 | 0.611 | 0.687 |
+| Gradient Boosting | **0.727** | 0.014 | 0.679 | 0.607 | 0.689 |
+| Logistic Regression | 0.718 | 0.014 | 0.672 | 0.579 | 0.673 |
+| HistGradientBoosting | 0.717 | 0.019 | 0.666 | 0.596 | 0.678 |
+| Naive Bayes | 0.685 | 0.011 | 0.621 | 0.400 | 0.634 |
+| Random Forest | 0.679 | 0.021 | 0.641 | 0.589 | 0.633 |
+| Decision Tree | 0.602 | 0.012 | 0.604 | 0.531 | 0.531 |
+| Dummy Classifier | 0.500 | 0.000 | 0.549 | 0.000 | — |
+
+Evaluation note: The Week 7 table summarises the available cross-validation outputs. Although the pipeline is configured for nested cross-validation, the available reports do not establish a separate nested-CV estimate for every model. The explicitly reported nested-CV ROC-AUC for Gradient Boosting was approximately 0.727 ± 0.014. Tuned and untuned scores should only be compared when both values come from the corresponding evaluation procedure.
+
+- **AdaBoost and Gradient Boosting achieved the strongest ROC-AUC results**, both reaching approximately 0.727. AdaBoost also achieved the highest accuracy (68.2%) and F1-score (0.611), while Gradient Boosting achieved the highest Average Precision (0.689). Their results are very similar, so neither model demonstrates a clear overall advantage across every metric.
+
+- Logistic Regression achieved a ROC-AUC of 0.718, placing it close to the two boosting models. It also obtained an F1-score of 0.579 and Average Precision of 0.673, making it a competitive alternative with a simpler model structure.
+
+- HistGradientBoosting achieved a ROC-AUC of 0.717, also close to Logistic Regression. However, its cross-validation standard deviation was slightly higher at 0.019, indicating more variation across folds than the leading models.
+
+- Naive Bayes and Random Forest achieved lower ROC-AUC scores of 0.685 and 0.679, respectively. Although Random Forest obtained a higher F1-score than Naive Bayes, its relatively large train-validation gap of 0.122 suggests substantial overfitting. Decision Tree performed considerably worse than the leading models, with a ROC-AUC of 0.602 and a train-validation gap of 0.112, also indicating overfitting.
+
+- The Dummy Classifier achieved a ROC-AUC of 0.500, corresponding to random discrimination. Its accuracy of 54.9% illustrates why accuracy alone can be misleading on an imbalanced dataset.
+
+### Week 7 vs Weeks 5 and 6
+
+Earlier experiments focused mainly on accuracy and the comparison between simpler models and tree-based approaches. Week 7 places greater emphasis on ROC-AUC as the model selection metric and compares a broader set of algorithms.
+
+The results show that boosting methods, particularly AdaBoost and Gradient Boosting, are the strongest candidates in the current comparison. Logistic Regression remains competitive, while the Decision Tree and Random Forest results suggest that model complexity does not necessarily translate into better generalisation.
+
+Direct numerical comparisons with previous weeks should be interpreted carefully because earlier summaries primarily reported accuracy, whereas this week's main ranking uses ROC-AUC. These metrics measure different aspects of performance.
+
+Overall, AdaBoost and Gradient Boosting were the leading models in Week 7, with mean ROC-AUC scores of approximately 0.727. AdaBoost achieved the highest accuracy and F1-score, while Gradient Boosting obtained the highest Average Precision. Logistic Regression and HistGradientBoosting were close alternatives, whereas Naive Bayes, Random Forest, and Decision Tree showed weaker discrimination.
+
+ROC-AUC remains the primary criterion for selecting a candidate model, but the final decision should also consider precision, recall, F1-score, cross-validation variability, overfitting, and fairness. The locked test set has not been evaluated, so these results should be treated as development-stage estimates rather than final test performance.
 
 ## Fairness Analysis
 
@@ -514,22 +572,20 @@ data/README.md
 
 ## Project Status
 
-**Current stage: Week 6 - Feature Engineering, Ensemble Models and Hyperparameter Tuning**
+**Current stage: Week 7 - Model Comparison, Hyperparameter Optimisation and Model Selection**
 
 The project has progressed from a simple baseline to a more comprehensive predictive pipeline incorporating:
 
 * Data diagnostics and domain-based validity checks
-* Improved missing-value handling and missingness indicators
-* Category standardisation and duplicate removal
-* Redundant-feature analysis and removal
+* Missing-value handling, missingness indicators and category standardisation
+* Duplicate removal and redundant-feature analysis
 * Leak-safe preprocessing and empirical encoder/scaler selection
 * Engineered juvenile-offence features
-* Logistic Regression, Decision Tree, Random Forest and AdaBoost models
+* Multiple candidate models, including Logistic Regression, Decision Tree, Random Forest, AdaBoost, Naive Bayes, Gradient Boosting and HistGradientBoosting
 * A Dummy Classifier reference baseline
-* Five-fold stratified cross-validation
-* Optuna-based hyperparameter tuning
-* Nested cross-validation for evaluating the tuning procedure
+* Stratified cross-validation and Optuna-based hyperparameter optimisation
+* Nested cross-validation for the explicitly evaluated tuning experiments
 * Out-of-fold classification and fairness evaluation
 * Timestamped experiment reports for reproducibility
 
-Future practical classes will continue to build on this pipeline.
+In Week 7, ROC-AUC was adopted as the primary model-selection metric. AdaBoost and Gradient Boosting achieved the strongest reported ROC-AUC results, at approximately 0.727. The locked test set remains unevaluated during model selection.

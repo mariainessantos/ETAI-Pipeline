@@ -89,9 +89,12 @@ preprocessing:
     categorical_strategy: "most_frequent"    # applies to sex, age_cat, c_charge_degree
 
 model: 
-  # Available models: "decision_tree", "random_forest", "logistic_regression", "dummy"
+  # Available models:
+  # "dummy", "logistic_regression", "naive_bayes", "decision_tree",
+  # "random_forest", "oblique_random_forest", "adaboost",
+  # "gradient_boosting", "hist_gradient_boosting"
   
-  type: "adaboost"  
+  type: "hist_gradient_boosting"  
   
   params:
   
@@ -116,17 +119,17 @@ model:
     #random_state: 42
 
     # ADABOOST
-    n_estimators: 100
-    learning_rate: 0.1
-    max_depth: 3
-    random_state: 42
+    #n_estimators: 100
+    #learning_rate: 0.1
+    #max_depth: 3
+    #random_state: 42
 
 tuning:
   enabled: true
   n_trials: 10
   n_splits: 3
   random_state: 42
-  search_space:
+  search_spaces:
     logistic_regression:
       model__C:
         type: float
