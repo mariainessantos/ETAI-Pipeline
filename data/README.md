@@ -25,7 +25,8 @@ The main goal is not only to build a predictive model, but also to make the pipe
 │   ├── W3_Notebooks/
 │   |── W4_Notebooks/
 |   |── W5_Notebooks/
-│   └── W6_Notebooks/
+│   |── W6_Notebooks/
+|   └── W8_Notebooks/
 │
 ├── data/
 │   ├── compas_two_year_recidivism.csv
@@ -58,6 +59,7 @@ The pipeline is being improved incrementally throughout the practical classes.
 | **4** | Model comparison and validation | Changed the selected scaler from Robust Scaling to Standard Scaling, evaluated Decision Tree, Random Forest, Logistic Regression and a Dummy baseline using the same 5-fold stratified cross-validation procedure, and extended the fairness analysis to out-of-fold predictions across the full development set. |
 | **5 and 6** | Feature engineering, ensemble models and hyperparameter tuning | Added engineered features, expanded the model comparison to include AdaBoost, implemented Optuna-based hyperparameter tuning and nested cross-validation, and compared predictive performance and fairness across tuned models. |
 | **7** | Model comparison, nested tuning and model selection | Expanded the comparison to include Naive Bayes, Gradient Boosting and HistGradientBoosting, alongside the previously evaluated models. Used ROC-AUC as the primary selection metric, compared untuned and tuned performance using nested cross-validation where tuning is available, and included a Dummy Classifier floor as a baseline. Continued to keep the test set locked during model selection. |
+| **8** | XGBoost and feature selection | Added XGBoost and a voting-based feature selector. Compared tuned XGBoost models with and without feature selection using nested cross-validation and a corrected paired test. Feature selection retained 3 of the 12 available features with very similar validation performance. |
 
 ### Week 2 - Baseline
 
@@ -134,7 +136,35 @@ The main developments were:
 
 * Generalisation and overfitting analysis: Examined the differences between training and validation performance to identify models that may be overfitting. This highlighted the larger train-validation gaps observed for Decision Tree and Random Forest.
 
-ROC-AUC was selected as the primary model selection metric because the task is to predict two-year recidivism, and ROC-AUC measures how well a model distinguishes between the two outcome classes across classification thresholds. This allows candidate models to be compared without relying exclusively on a fixed threshold such as 0.5. 
+ROC-AUC was selected as the primary model selection metric because the task is to predict two-year recidivism, and ROC-AUC measures how well a model distinguishes between the two outcome classes across classification thresholds. This allows candidate models to be compared without relying exclusively on a fixed threshold such as 0.5.
+
+### Week 8 - XGBoost and Feature Selection
+
+Week 8 focused on introducing XGBoost and investigating whether feature selection could reduce model complexity without substantially affecting predictive performance.
+
+The main developments were:
+
+- XGBoost: Added XGBoost to the model factory and integrated it into the existing preprocessing, evaluation and hyperparameter-tuning pipeline.
+
+- Feature selection: Implemented a voting-based selector combining Random Forest, Gradient Boosting and Logistic Regression to identify relevant features.
+
+- Model comparison: Ran two tuned XGBoost experiments using the same nested cross-validation procedure: one with feature selection enabled and one without it. Both experiments used five outer folds, three inner folds and ten Optuna trials per outer fold.
+
+The feature-selection experiment retained 3 of the 12 features: numeric__age, numeric__priors_count and categorical__age_cat.
+
+| Metric | XGBoost with selection | XGBoost without selection |
+|---|---:|---:|
+| Nested CV ROC-AUC | 0.725 ± 0.013 | 0.726 ± 0.013 |
+| Accuracy | 68.1% | 67.9% |
+| Balanced accuracy | 67.1% | 66.9% |
+| F1-score | 0.613 | 0.614 |
+| Average Precision | 0.685 | 0.685 |
+| Mean train-validation gap | +0.006 | +0.010 |
+| Features retained | 3 of 12 | 12 of 12 |
+
+A corrected paired test comparing the five outer folds (test/train ratio = 0.25) found a mean ROC-AUC difference of −0.0012, with feature selection winning 2 out of 5 folds. The result was not statistically significant (t = −0.389, p = 0.7174), indicating no evidence of a performance difference between the configurations. However, this does not prove equivalence, and the test used rounded fold scores.
+
+Overall, feature selection reduced the features from 12 to 3 while maintaining comparable predictive performance. Although the model without selection achieved a marginally higher ROC-AUC (0.726 vs. 0.725), the selection model had a slightly smaller train-validation gap. Therefore, feature selection is preferred for its greater simplicity without a meaningful loss in performance.
 
 ## Preprocessing
 
@@ -227,6 +257,7 @@ The pipeline supports several models through a common preprocessing and evaluati
 * Gradient Boosting
 * HistGradientBoosting
 * Dummy Classifier baseline
+* XGBoost
 
 The Dummy Classifier provides a reference point for interpreting predictive accuracy. Random Forest and AdaBoost extend the comparison to ensemble learning, while Logistic Regression provides a simpler linear baseline.
 
@@ -416,6 +447,19 @@ Overall, AdaBoost and Gradient Boosting were the leading models in Week 7, with 
 
 ROC-AUC remains the primary criterion for selecting a candidate model, but the final decision should also consider precision, recall, F1-score, cross-validation variability, overfitting, and fairness. The locked test set has not been evaluated, so these results should be treated as development-stage estimates rather than final test performance.
 
+### Week 8 vs Week 7
+
+Week 7's explicitly reported nested-CV result for Gradient Boosting was approximately 0.727 ± 0.014 ROC-AUC. In Week 8, tuned XGBoost achieved 0.725 ± 0.013 with feature selection and 0.726 ± 0.013 without feature selection.
+
+| Model and evaluation stage | Mean ROC-AUC | Standard deviation |
+|---|---:|---:|
+| Week 7 - Gradient Boosting (nested CV) | 0.727 | 0.014 |
+| Week 8 - XGBoost with feature selection (nested CV) | 0.725 | 0.013 |
+| Week 8 - XGBoost without feature selection (nested CV) | 0.726 | 0.013 |
+
+The Week 8 XGBoost results are very close to the Week 7 Gradient Boosting result, with differences of only 0.001–0.002 ROC-AUC. The standard deviations are also similar, suggesting comparable variation across the outer folds. These results do not show a clear predictive improvement over Week 7, although XGBoost provides another competitive boosting model and the feature-selection experiment demonstrates that a much smaller feature set can retain similar performance. This comparison should be interpreted cautiously: it compares different algorithms evaluated in different weekly experiments, rather than a single controlled experiment in which only the model was changed.
+
+
 ## Fairness Analysis
 
 Fairness is assessed by comparing the false-positive rate (FPR) of each model across racial groups with the FPR observed for COMPAS's own score.
@@ -572,7 +616,7 @@ data/README.md
 
 ## Project Status
 
-**Current stage: Week 7 - Model Comparison, Hyperparameter Optimisation and Model Selection**
+**Current stage: Week 8 - XGBoost and Feature Selection**
 
 The project has progressed from a simple baseline to a more comprehensive predictive pipeline incorporating:
 
@@ -581,11 +625,11 @@ The project has progressed from a simple baseline to a more comprehensive predic
 * Duplicate removal and redundant-feature analysis
 * Leak-safe preprocessing and empirical encoder/scaler selection
 * Engineered juvenile-offence features
-* Multiple candidate models, including Logistic Regression, Decision Tree, Random Forest, AdaBoost, Naive Bayes, Gradient Boosting and HistGradientBoosting
+* Multiple candidate models, including Logistic Regression, Decision Tree, Random Forest, AdaBoost, Naive Bayes, Gradient Boosting, HistGradientBoosting, and XGBoost
 * A Dummy Classifier reference baseline
 * Stratified cross-validation and Optuna-based hyperparameter optimisation
 * Nested cross-validation for the explicitly evaluated tuning experiments
 * Out-of-fold classification and fairness evaluation
 * Timestamped experiment reports for reproducibility
 
-In Week 7, ROC-AUC was adopted as the primary model-selection metric. AdaBoost and Gradient Boosting achieved the strongest reported ROC-AUC results, at approximately 0.727. The locked test set remains unevaluated during model selection.
+In Week 7, ROC-AUC was adopted as the primary model-selection metric, with AdaBoost and Gradient Boosting achieving the strongest reported results at approximately 0.727. In Week 8, XGBoost achieved nested-CV ROC-AUC values of 0.725 with feature selection and 0.726 without it, both close to the Week 7 Gradient Boosting result. The selector reduced the feature set from 12 to 3, and the corrected paired test found no statistically significant difference between the two XGBoost configurations based on the rounded outer-fold scores (p = 0.7174). The locked test set remains unevaluated during model selection.
