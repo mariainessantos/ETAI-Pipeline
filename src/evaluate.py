@@ -1,11 +1,12 @@
+
 """
 Evaluation on the development set: stratified k-fold cross-validation of the
 whole pipeline on several metrics, out-of-fold probabilities and reports,
 a fairness check and a paired comparison of two models.
 
 The locked test set is never used here.
-
 """
+
 import numpy as np
 import pandas as pd
 from scipy import stats
@@ -46,7 +47,6 @@ def build_scorers(metrics: list) -> dict:
     return scorers
 
 
-# evaluate multiple metrics and return OOF probabilities.
 def cross_validate_pipeline(
     pipeline,
     X,
@@ -119,7 +119,7 @@ def cross_validate_pipeline(
 
     return fold_scores, oof_proba
 
-# report all metrics, with a configurable title and selection metric.
+
 def cv_report(
     fold_scores: pd.DataFrame,
     metrics: list,
@@ -156,6 +156,7 @@ def cv_report(
     text = "\n".join(lines)
     print(text)
     return text
+
 
 def corrected_paired_test(
     scores_a,
@@ -202,6 +203,7 @@ def corrected_paired_test(
         "p_value": p_value,
     }
 
+
 def oof_classification_report(
     y_true,
     oof_proba,
@@ -240,28 +242,28 @@ def fairness_report(
     threshold: float = 0.5,
 ) -> str:
     """
-    Compare false positive rates across groups for:
-      - our model, using out-of-fold predictions;
-      - COMPAS, where score_text other than 'Low' is treated
-        as a positive prediction.
+    Compare false positive rates across sensitive groups.
 
-    Both are evaluated on the same development rows.
+    Always reports the model's false positive rate using out-of-fold
+    predictions.
+
+    If score_text is available, also compares the model with the
+    original COMPAS score (where anything other than 'Low' is
+    treated as a positive prediction).
+
+    This makes the function reusable across datasets:
+      - COMPAS: model + COMPAS score comparison.
+      - Other datasets: model fairness analysis only.
 
     This is a descriptive fairness check, not a complete fairness audit.
     """
-    df = extras.copy()
-
-    if sensitive_attr not in df.columns:
+    if extras is None or sensitive_attr not in extras.columns:
         raise ValueError(
             f"Sensitive attribute '{sensitive_attr}' is missing "
             "from the extras DataFrame."
         )
 
-    if "score_text" not in df.columns:
-        raise ValueError(
-            "'score_text' is missing from extras; required for "
-            "comparison with COMPAS."
-        )
+    df = extras.copy()
 
     df[sensitive_attr] = (
         df[sensitive_attr]
@@ -270,39 +272,51 @@ def fairness_report(
     )
 
     df["y_true"] = np.asarray(y_true)
+
     df["y_pred_model"] = (
         np.asarray(oof_proba) >= threshold
     ).astype(int)
 
-    df["y_pred_compas"] = (
-        df["score_text"].notna()
-        & (df["score_text"] != "Low")
-    ).astype(int)
+    # Include the COMPAS comparison only when score_text exists.
+    comparisons = [
+        ("Our model", "y_pred_model")
+    ]
+
+    if "score_text" in df.columns:
+        df["y_pred_compas"] = (
+            df["score_text"].notna()
+            & (df["score_text"] != "Low")
+        ).astype(int)
+
+        comparisons.append(
+            ("COMPAS's own score", "y_pred_compas")
+        )
 
     lines = [
         f"False positive rate by {sensitive_attr} "
         "(development set, out-of-fold)",
-        "(share of people who did NOT reoffend, but were predicted to)",
+        "(share of actual negatives predicted as positive)",
         f"Model classification threshold: {threshold}",
         "",
     ]
 
-    for label, col in [
-        ("Our model", "y_pred_model"),
-        ("COMPAS's own score", "y_pred_compas"),
-    ]:
+    for label, column in comparisons:
         lines.append(f"  {label}:")
 
         for group, group_df in df.groupby(
             sensitive_attr,
             dropna=False,
         ):
-            negatives = group_df[group_df["y_true"] == 0]
+            negatives = group_df[
+                group_df["y_true"] == 0
+            ]
 
             if len(negatives) == 0:
                 continue
 
-            fpr = (negatives[col] == 1).mean()
+            fpr = (
+                negatives[column] == 1
+            ).mean()
 
             lines.append(
                 f"    {str(group):<20s} "
