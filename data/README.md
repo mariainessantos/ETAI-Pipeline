@@ -4,35 +4,45 @@
 
 ## Project Overview
 
-This project develops a predictive pipeline for **two-year recidivism** using ProPublica's COMPAS dataset.
+This project develops a predictive pipeline for **two-year recidivism** using ProPublica's COMPAS dataset and extends the pipeline to a second classification task using the Adult Income dataset.
 
-The dataset comes from the data used in ProPublica's 2016 investigation into COMPAS, a risk-assessment algorithm used in the US criminal justice system to help inform decisions such as bail and sentencing.
+The COMPAS dataset comes from the data used in ProPublica's 2016 investigation into COMPAS, a risk-assessment algorithm used in the US criminal justice system to help inform decisions such as bail and sentencing.
 
-The project started from a simple baseline pipeline provided for the practical classes. It is being progressively improved throughout the semester by addressing weaknesses in the original preprocessing, validation, and evaluation procedures.
+The project started from a simple baseline pipeline provided for the practical classes. It has been progressively improved throughout the semester by addressing weaknesses in the original preprocessing, validation, model selection, and evaluation procedures.
 
-The main goal is not only to build a predictive model, but also to make the pipeline **reliable, reproducible, and easier to evaluate for both predictive performance and fairness**.
+In Week 9, the pipeline was extended beyond COMPAS using **Option A: the Adult Income dataset**. This required separating dataset-specific configurations and entry points from the shared modelling workflow, allowing the same pipeline modules to be reused across different datasets.
+
+The main goal is not only to build predictive models, but also to make the pipeline **reliable, reproducible, reusable, and easier to evaluate for both predictive performance and fairness**.
 
 ## Project Structure
 
 ```text
 .
 ├── .gitignore
-├── config.yaml                  # Data, preprocessing, model and tuning settings
-├── main.py                      # Entry point for the complete pipeline
+├── config.yaml                  # COMPAS configuration
+├── config_adult.yaml            # Adult Income configuration
+├── main.py                      # COMPAS entry point
+├── main_adult.py                # Adult Income entry point
 ├── requirements.txt             # Python dependencies
+├── week9_confirmation.ipynb     # Mini analysis of the new dataset 
 │
 ├── Classes/
 │   ├── W3_Notebooks/
-│   |── W4_Notebooks/
-|   |── W5_Notebooks/
-│   |── W6_Notebooks/
-|   └── W8_Notebooks/
+│   ├── W4_Notebooks/
+│   ├── W5_Notebooks/
+│   ├── W6_Notebooks/
+│   ├── W8_Notebooks/
+│   └── W9_Notebooks/
 │
 ├── data/
 │   ├── compas_two_year_recidivism.csv
+│   ├── adult_train.csv
+│   ├── adult_new.csv
 │   └── README.md                # Dataset description and data dictionary
 │
-├── results/                     # Timestamped experiment reports
+├── results/                     # COMPAS experiment reports
+├── results_adult/               # Adult experiment reports and predictions
+│   └── adult_predictions.csv
 │
 ├── src/
 │   ├── __init__.py
@@ -40,13 +50,17 @@ The main goal is not only to build a predictive model, but also to make the pipe
 │   ├── data_diagnostics.py      # Data quality checks
 │   ├── evaluate.py              # Cross-validation and fairness evaluation
 │   ├── model.py                 # Model construction
+│   ├── pipeline.py              # Shared modelling and evaluation workflow
+│   ├── predict.py               # Predictions for new, unlabelled data
 │   ├── preprocessing.py         # Cleaning, feature engineering and preprocessing
-│   ├── results.py               # Saving experiment reports
+│   ├── results.py               # Saving experiment reports and scores
 │   └── tuning.py                # Hyperparameter tuning and nested CV
 │
 └── venv/                        # Local virtual environment (ignored by Git)
 
 ```
+
+The project now uses separate configuration files and entry points for each dataset, while keeping the modelling, preprocessing, evaluation, and prediction logic in shared modules under src/.
 
 ## Pipeline Progress
 
@@ -60,6 +74,7 @@ The pipeline is being improved incrementally throughout the practical classes.
 | **5 and 6** | Feature engineering, ensemble models and hyperparameter tuning | Added engineered features, expanded the model comparison to include AdaBoost, implemented Optuna-based hyperparameter tuning and nested cross-validation, and compared predictive performance and fairness across tuned models. |
 | **7** | Model comparison, nested tuning and model selection | Expanded the comparison to include Naive Bayes, Gradient Boosting and HistGradientBoosting, alongside the previously evaluated models. Used ROC-AUC as the primary selection metric, compared untuned and tuned performance using nested cross-validation where tuning is available, and included a Dummy Classifier floor as a baseline. Continued to keep the test set locked during model selection. |
 | **8** | XGBoost and feature selection | Added XGBoost and a voting-based feature selector. Compared tuned XGBoost models with and without feature selection using nested cross-validation and a corrected paired test. Feature selection retained 3 of the 12 available features with very similar validation performance. |
+| **9** | Beyond COMPAS: Adult Income and reusable pipeline | Extended the pipeline to a second dataset using a separate configuration and entry point. Generalised the fairness report, handled Adult-specific missing values and feature decisions, and generated predictions for 2,000 unlabelled observations. |
 
 ### Week 2 - Baseline
 
@@ -166,6 +181,193 @@ A corrected paired test comparing the five outer folds (test/train ratio = 0.25)
 
 Overall, feature selection reduced the features from 12 to 3 while maintaining comparable predictive performance. Although the model without selection achieved a marginally higher ROC-AUC (0.726 vs. 0.725), the selection model had a slightly smaller train-validation gap. Therefore, feature selection is preferred for its greater simplicity without a meaningful loss in performance.
 
+### Week 9 - Beyond COMPAS: Adult Income Dataset
+
+Week 9 extended the project beyond the COMPAS dataset by implementing **Option A: Adult Income**.
+
+The objective was to demonstrate that the existing pipeline could be reused for a different classification task without duplicating the modelling and evaluation code.
+
+The main developments were:
+
+- Separate configuration: Created config_adult.yaml to define the Adult dataset path, target, sensitive attribute, preprocessing choices, model parameters and output locations.
+
+- Separate entry point: Created main_adult.py to run the Adult experiment independently of COMPAS.
+
+- Shared pipeline: Moved the common modelling and evaluation workflow into src/pipeline.py, which receives the path to the dataset-specific configuration.
+
+- Reusable prediction functionality: Added src/predict.py to generate predictions for a new dataset without requiring target labels.
+
+- Generalised fairness evaluation: Updated the fairness report so that it can evaluate a sensitive attribute even when a dataset does not contain the original COMPAS score_text variable.
+
+- Adult-specific preprocessing: Handled placeholder values, missing observations, redundant columns and dataset-specific feature decisions.
+
+- Prediction generation: Generated and validated predictions for all 2,000 rows in adult_new.csv.
+
+The new architecture allows each dataset to have its own configuration and entry point while reusing the same shared preprocessing, model-building, evaluation and prediction modules.
+
+#### Data Preparation and Feature Decisions
+
+Target and identifier: 
+
+- income_over_50k is the prediction target.
+
+- id is retained for the final prediction output but excluded from model features.
+
+- fnlwgt is excluded because it represents a census sampling weight rather than an individual characteristic intended for this prediction task.
+
+Sensitive attributes:
+
+- race is used as the sensitive attribute for fairness analysis and is excluded from the model features.
+
+- sex remains a model feature and is included in the categorical preprocessing.
+
+Redundant feature:
+
+- education is removed because education_num provides a numerical representation of educational level. Keeping both would introduce redundant information.
+
+Categorical missing values:
+
+- The ? placeholder in workclass, occupation and native_country is converted into missing data.
+
+- Missing values are imputed using the configured categorical imputation strategy.
+
+- Missingness indicators are added for workclass and occupation, because their missingness patterns were found to overlap and may contain information.
+
+- native_country is imputed without an additional missingness indicator.
+
+Numeric missing values and validity checks:
+
+- The configured numeric features are handled through numerical imputation.
+
+- Domain validity rules are configured for age, hours_per_week, capital_gain and capital_loss.
+
+- The value 99999 in capital_gain is retained because it is a valid top-coded value in the dataset, rather than being treated as missing.
+
+#### Feature Selection Status
+
+Feature selection is disabled for the Adult experiment. The model therefore uses the configured source features rather than selecting a smaller subset through the Week 8 voting-based selector.
+
+The Adult configuration contains 36 source features: 23 numerical and 13 categorical.
+
+The anonymised variables v01 to v25 are retained rather than being removed manually.
+
+The final transformed feature matrix may contain additional columns due to categorical encoding and missingness indicators.
+
+#### WHat Broke, Why, ahd How It Was Fixed
+
+Adapting the pipeline to a new dataset revealed that some parts of the original implementation were too closely tied to COMPAS-specific variables.
+
+| Issue | Why it happened | Fix |
+|---|---|---|
+| Fairness report expected `score_text` | The original fairness comparison was designed around the COMPAS score and its categories. Adult does not contain this variable. | Generalised `fairness_report()` to always calculate the model's FPR by the configured sensitive attribute, and only compare with COMPAS when `score_text` is available. |
+| Dataset-specific columns and preprocessing | COMPAS and Adult have different target variables, sensitive attributes, numeric and categorical features, and missing-value patterns. | Moved dataset-specific settings into separate YAML configurations while keeping the preprocessing and modelling workflow shared. |
+| Different output files and experiment results | Running multiple datasets through the same default output paths could mix reports and scoreboard entries. | Added separate output directories and scoreboard paths for Adult and COMPAS. |
+| New unlabelled prediction dataset | `adult_new.csv` does not contain the target variable, so it cannot be evaluated like the labelled training dataset. | Added `src/predict.py` to apply the same cleaning and feature preparation steps and generate probabilities and class predictions without requiring target labels. |
+| Duplicate handling during prediction | Removing duplicate observations from prediction data would cause some input rows to receive no prediction. | Kept duplicate removal in the training workflow but preserved every input row during prediction. |
+
+These changes made the pipeline more reusable and allowed the Adult experiment to run without changing the original COMPAS configuration or duplicating the modelling workflow.
+
+#### Model Evaluation and Results
+
+The Adult model was evaluated using five-fold stratified cross-validation on the development set.
+
+The labelled dataset was divided into:
+
+- 4,800 development observations, used for cross-validation and model fitting.
+
+- 1,200 locked test observations, kept separate and not used during model selection or evaluation.
+
+The primary selection metric was ROC-AUC.
+
+The XGBoost model used the following configured hyperparameters:
+
+| Parameter | Value |
+|---|---:|
+| Number of estimators | 300 |
+| Learning rate | 0.05 |
+| Maximum depth | 4 |
+| Random state | 42 |
+
+Hyperparameter tuning was disabled for this experiment. The model was evaluated using its configured default parameters.
+
+The Dummy Classifier provided a no-model reference point.
+
+| Run | Model | Evaluation | ROC-AUC | Accuracy | F1-score (class 1) |
+|---|---|---|---:|---:|---:|
+| No-model baseline | Dummy Classifier | 5-fold CV | 0.500 | 0.760 | 0.000 |
+| Adult baseline | XGBoost | 5-fold CV | **0.908 ± 0.018** | **0.861 ± 0.017** | **0.671 ± 0.045** |
+
+The XGBoost model exceeded all three target metrics:
+
+| Target metric | Required score | Adult result | Status |
+|---|---:|---:|---|
+| ROC-AUC | ≥ 0.900 | **0.908** | Achieved |
+| Accuracy | ≥ 0.855 | **0.861** | Achieved |
+| F1-score (class 1) | ≥ 0.660 | **0.671** | Achieved |
+
+Additional cross-validation results:
+
+| Metric | Mean | Standard deviation |
+|---|---:|---:|
+| Balanced accuracy | 0.770 | 0.028 |
+| Precision | 0.771 | 0.042 |
+| Recall | 0.595 | 0.051 |
+| F1-score | 0.671 | 0.045 |
+| F2-score | 0.623 | 0.049 |
+| ROC-AUC | 0.908 | 0.018 |
+| Average Precision | 0.791 | 0.030 |
+
+The out-of-fold confusion matrix at a classification threshold of 0.5 was:
+
+| Actual class | Predicted 0 | Predicted 1 |
+|---|---:|---:|
+| 0 | 3,448 | 203 |
+| 1 | 465 | 684 |
+
+The model identifies the negative class more successfully than the positive class. In particular, the recall for class 1 is 0.595, meaning that some observations with income above $50,000 are still classified as negative at the selected threshold.
+
+The mean train-validation ROC-AUC gap was +0.068, suggesting some overfitting. Nevertheless, the validation results were sufficiently strong to meet all three target metrics without additional tuning.
+
+#### Fairness Analysis
+
+Fairness was evaluated using the false-positive rate (FPR) across racial groups, based on out-of-fold predictions on the Adult development set.
+
+The FPR measures the proportion of actual negative observations incorrectly predicted as positive.
+
+The model's FPR at a threshold of 0.5 was:
+
+| Race group | False-positive rate | Number of actual negatives |
+|---|---:|---:|
+| Amer-Indian-Eskimo | 0.03 | 38 |
+| Asian-Pac-Islander | 0.10 | 107 |
+| Black | 0.03 | 387 |
+| Other | 0.00 | 39 |
+| White | 0.06 | 3,080 |
+
+These results show variation in false-positive rates across racial groups. However, the group sizes are very different, and the estimates for smaller groups are less reliable.
+
+This is a descriptive fairness check rather than a complete fairness audit. It does not establish that the model is fair overall, and further analysis would be needed to assess other measures such as false-negative rates, recall, calibration and predictive performance across groups.
+
+#### Prediction on adult_new.csv
+
+After evaluation, the XGBoost pipeline was refitted using all 4,800 development observations.
+
+The fitted model was then applied to adult_new.csv, which contains 2,000 unlabelled observations.
+
+The output contains all 2,000 input observations:
+
+| Prediction | Number of observations | Percentage |
+|---|---:|---:|
+| 0 - Income ≤ $50K | 1,634 | 81.7% |
+| 1 - Income > $50K | 366 | 18.3% |
+| **Total** | **2,000** | **100%** |
+
+The generated file is results_adult/adult_predictions.csv. It contains the original id, the predicted probability and the predicted class for each observation.
+
+#### Hardest Assumption and What Led to the Traget Scores
+
+The hardest assumption was deciding how to interpret the Adult dataset's variables without introducing unnecessary information or removing potentially useful features. In particular, fnlwgt is a census sampling weight rather than a personal characteristic, education overlaps with education_num, and race was reserved for fairness analysis while sex remained a model feature. Keeping the anonymised variables and handling missingness explicitly allowed the model to use the available information without relying on arbitrary feature removal. The configured XGBoost model, together with target encoding, standard scaling and the imputation strategy, achieved ROC-AUC of 0.908, accuracy of 0.861 and class 1 F1-score of 0.671, meeting all three target scores without hyperparameter tuning.
+
 ## Preprocessing
 
 The preprocessing decisions were based on the EDA performed in:
@@ -239,11 +441,13 @@ During Week 4, the scaler used in the pipeline was changed from Robust Scaling t
 
 ## Hyperparameter Tuning and Validation
 
-Optuna was used to search the hyperparameter spaces defined in config.yaml. The three main candidate models in this experiment were Logistic Regression, Random Forest and AdaBoost.
+Optuna was used to search the hyperparameter spaces defined in the dataset-specific configuration files.
 
-For each model, nested cross-validation used five outer folds, three inner folds and ten optimisation trials per outer fold. The outer validation folds provided the main estimate of generalisation performance, while the best Optuna score was treated as a tuning result rather than an unbiased performance estimate.
+For the COMPAS experiments, nested cross-validation used five outer folds, three inner folds and ten optimisation trials per outer fold. The outer validation folds provided the main estimate of generalisation performance, while the best Optuna score was treated as a tuning result rather than an unbiased performance estimate.
 
 After nested cross-validation, a separate search on the complete development set selected the configuration used to refit the final model. The locked test set was not used in either optimisation procedure.
+
+For the Week 9 Adult experiment, tuning was disabled because the configured XGBoost model already met all three target metrics.
 
 ## Models and Validation
 
@@ -259,7 +463,7 @@ The pipeline supports several models through a common preprocessing and evaluati
 * Dummy Classifier baseline
 * XGBoost
 
-The Dummy Classifier provides a reference point for interpreting predictive accuracy. Random Forest and AdaBoost extend the comparison to ensemble learning, while Logistic Regression provides a simpler linear baseline.
+The Dummy Classifier provides a reference point for interpreting predictive performance.
 
 The pipeline uses stratified cross-validation to preserve the approximate class proportions across folds. During hyperparameter tuning, nested cross-validation separates the inner optimisation procedure from the outer performance evaluation.
 
@@ -269,12 +473,17 @@ The reported metrics include:
 * Mean and standard deviation of training and validation accuracy
 * Mean train–validation gap
 * Out-of-fold precision, recall and F1-scores
-* Out-of-fold accuracy
-* False-positive rates by race
-* Optuna's selected hyperparameters and best inner cross-validation score
-* Nested cross-validation results
+* Out-of-fold accuracy and balanced accuracy
+* ROC-AUC and average precision
+* False-positive rates by sensitive groups
+* Optuna's selected hyperparameters and best inner cross-validation score, when tuning is enabled
+* Nested cross-validation results, when tuning is enabled
 
-The development set contains 5,771 rows, while the separate test set contains 1,443 rows. The test set remains locked until the modelling and selection procedure is finalised.
+For COMPAS, the development set contains 5,771 rows and the separate test set contains 1,443 rows.
+
+For Adult Income, the development set contains 4,800 rows and the separate test set contains 1,200 rows.
+
+The test sets remain locked during model selection.
 
 ## Results
 
@@ -459,27 +668,38 @@ Week 7's explicitly reported nested-CV result for Gradient Boosting was approxim
 
 The Week 8 XGBoost results are very close to the Week 7 Gradient Boosting result, with differences of only 0.001–0.002 ROC-AUC. The standard deviations are also similar, suggesting comparable variation across the outer folds. These results do not show a clear predictive improvement over Week 7, although XGBoost provides another competitive boosting model and the feature-selection experiment demonstrates that a much smaller feature set can retain similar performance. This comparison should be interpreted cautiously: it compares different algorithms evaluated in different weekly experiments, rather than a single controlled experiment in which only the model was changed.
 
+### Week 9 - Adult Income Results
+
+The Adult Income experiment achieved the following results using XGBoost and five-fold stratified cross-validation:
+
+| Metric | Mean | Standard deviation |
+|---|---:|---:|
+| ROC-AUC | 0.908 | 0.018 |
+| Accuracy | 0.861 | 0.017 |
+| Balanced accuracy | 0.770 | 0.028 |
+| Precision | 0.771 | 0.042 |
+| Recall | 0.595 | 0.051 |
+| F1-score | 0.671 | 0.045 |
+| F2-score | 0.623 | 0.049 |
+| Average Precision | 0.791 | 0.030 |
+
+The model achieved all three target scores: ROC-AUC of at least 0.90, accuracy of at least 0.855, and class 1 F1-score of at least 0.66.
+
+Unlike the COMPAS experiments in previous weeks, the Adult experiment did not require hyperparameter tuning to reach the specified targets.
 
 ## Fairness Analysis
 
-Fairness is assessed by comparing the false-positive rate (FPR) of each model across racial groups with the FPR observed for COMPAS's own score.
+Fairness is assessed by comparing the false-positive rate (FPR) across racial groups.
 
-The FPR measures the proportion of individuals who did not reoffend but were predicted as positive. It is therefore one useful measure of potential disparities in risk classification, although it does not capture every dimension of fairness.
+The FPR measures the proportion of individuals who did not experience the positive outcome but were predicted as positive. It is one useful measure of potential disparities in classification, although it does not capture every dimension of fairness.
 
-For the tuned model comparison, FPR was calculated from out-of-fold predictions across the 5,771-row development set.
+For COMPAS, the fairness report compares the model with COMPAS's own score where the original score_text variable is available.
 
-The results showed that all three candidate models had lower FPRs than COMPAS for African-American individuals:
+For Adult Income, the fairness report evaluates the model's FPR by race. Since Adult does not contain the original COMPAS score, no comparison with COMPAS's score is made.
 
-| Model | African-American FPR | Caucasian FPR | Hispanic FPR |
-|:---|---:|---:|---:|
-| COMPAS | 0.45 | 0.23 | 0.23 |
-| Logistic Regression | **0.25** | **0.11** | 0.15 |
-| Random Forest | 0.30 | 0.16 | 0.17 |
-| AdaBoost | 0.28 | 0.14 | **0.15** |
+The Adult results showed variation in false-positive rates across racial groups, with values ranging from 0.00 to 0.10 in the development-set out-of-fold predictions.
 
-These comparisons suggest that the models reduce false-positive rates for several groups relative to COMPAS, although the extent of the reduction differs across models and groups. Logistic Regression had the lowest FPR for the African-American and Caucasian groups in this comparison, while AdaBoost offered the highest nested CV accuracy.
-
-Fairness should not be judged using FPR alone. The analysis must also consider recall, precision, group sample sizes and other potential sources of disparity. In particular, estimates for Asian and Native American individuals are uncertain because those groups contain very few observations in the development set. The fairness results are therefore descriptive and should not be interpreted as proof that any model is fair overall.
+Fairness should not be judged using FPR alone. The analysis must also consider recall, precision, group sample sizes and other potential sources of disparity. Estimates for groups with fewer observations are less reliable. The fairness results are therefore descriptive and should not be interpreted as proof that any model is fair overall.
 
 ## Running the Pipeline
 
@@ -517,9 +737,45 @@ pip install -r requirements.txt
 
 The virtual environment only needs to be created and configured once.
 
-### 2. Run the project
+### 2. Run COMPAS
 
-Every subsequent time, activate the environment and run:
+With the environment active:
+
+```text
+python main.py
+```
+
+This runs the COMPAS experiment using config.yaml.
+
+### 3. Run Adult Income
+
+With the environment active:
+
+```text
+python main_adult.py
+```
+
+This runs the Adult Income experiment using config_adult.yaml.
+
+The pipeline will:
+
+1. Load the configured dataset.
+
+2. Clean and preprocess the data.
+
+3. Split the data into development and locked test sets.
+
+4. Perform stratified cross-validation on the development set.
+
+5. Run hyperparameter tuning if enabled in the configuration.
+
+6. Generate out-of-fold classification and fairness reports.
+
+7. Refit the selected pipeline on all development rows.
+
+8. Generate predictions for new data if a prediction file is configured.
+
+9. Save the scoreboard and full experiment report.
 
 #### macOS / Linux
 
@@ -534,19 +790,6 @@ python main.py
 venv\Scripts\activate
 python main.py
 ```
-
-The pipeline will:
-
-1. Load the dataset.
-2. Run data diagnostics.
-3. Clean and preprocess the data.
-4. Split the data into training and test sets.
-5. Perform 5-fold stratified cross-validation on the development set.
-6. Train and evaluate the configured models.
-7. Generate out-of-fold predictions.
-8. Perform the fairness analysis.
-9. Refit the configured final model on the complete development set.
-10. Save the results to results/.
 
 ## Troubleshooting
 
@@ -577,21 +820,31 @@ Alternatively, move the project to another directory where the current user has 
 
 ## Saving and Comparing Results
 
-Each pipeline run is automatically saved as a timestamped file in:
+Each pipeline run is automatically saved as a timestamped file.
+
+The COMPAS reports are stored in:
 
 ```text
 results/
 ```
 
-For example:
+The Adult reports are stored in:
 
 ```text
-results/run_20260916_143012.txt
+results_adult/
 ```
 
-This makes it possible to compare results across different practical classes and model configurations.
+The scoreboard paths are configured independently:
 
-The `results/` directory is generated automatically and is not tracked by Git because it contains generated output rather than source code.
+- COMPAS: results/runs.csv
+
+- Adult Income: results_adult/runs.csv
+
+This makes it possible to compare experiments without mixing results from different datasets.
+
+Generated reports and scoreboards are experiment outputs rather than source code. Their tracking status is controlled by .gitignore.
+
+The Adult prediction file, results_adult/adult_predictions.csv, is a required project output and should be included in the repository.
 
 ## GitHub Workflow
 
@@ -608,28 +861,61 @@ If GitHub asks for a password when using HTTPS, GitHub no longer accepts the nor
 
 ## Dataset
 
-For the dataset description, problem definition, and complete data dictionary, see:
+For the COMPAS dataset description, problem definition, and complete data dictionary, see:
 
 ```text
 data/README.md
 ```
 
+The Adult Income task and its expected workflow are documented in the Week 9 practical notebook:
+
+```text
+Classes/W9_Notebooks/09_beyond_compas.ipynb
+```
+
+The Adult training and prediction datasets are:
+
+```text
+data/adult_train.csv
+data/adult_new.csv
+```
+
 ## Project Status
 
-**Current stage: Week 8 - XGBoost and Feature Selection**
+**Current stage: Week 9 - Beyond COMPAS: Adult income**
 
 The project has progressed from a simple baseline to a more comprehensive predictive pipeline incorporating:
 
-* Data diagnostics and domain-based validity checks
-* Missing-value handling, missingness indicators and category standardisation
-* Duplicate removal and redundant-feature analysis
-* Leak-safe preprocessing and empirical encoder/scaler selection
-* Engineered juvenile-offence features
-* Multiple candidate models, including Logistic Regression, Decision Tree, Random Forest, AdaBoost, Naive Bayes, Gradient Boosting, HistGradientBoosting, and XGBoost
-* A Dummy Classifier reference baseline
-* Stratified cross-validation and Optuna-based hyperparameter optimisation
-* Nested cross-validation for the explicitly evaluated tuning experiments
-* Out-of-fold classification and fairness evaluation
-* Timestamped experiment reports for reproducibility
+* Data diagnostics and domain-based validity checks.
 
-In Week 7, ROC-AUC was adopted as the primary model-selection metric, with AdaBoost and Gradient Boosting achieving the strongest reported results at approximately 0.727. In Week 8, XGBoost achieved nested-CV ROC-AUC values of 0.725 with feature selection and 0.726 without it, both close to the Week 7 Gradient Boosting result. The selector reduced the feature set from 12 to 3, and the corrected paired test found no statistically significant difference between the two XGBoost configurations based on the rounded outer-fold scores (p = 0.7174). The locked test set remains unevaluated during model selection.
+* Missing-value handling, missingness indicators and category standardisation.
+
+* Duplicate removal and redundant-feature analysis.
+
+* Leak-safe preprocessing and empirical encoder/scaler selection.
+
+* Engineered juvenile-offence features for COMPAS.
+
+* Multiple candidate models, including Logistic Regression, Decision Tree, Random Forest, AdaBoost, Naive Bayes, Gradient Boosting, HistGradientBoosting and XGBoost.
+
+* A Dummy Classifier reference baseline.
+
+* Stratified cross-validation and Optuna-based hyperparameter optimisation.
+
+* Nested cross-validation for the explicitly evaluated tuning experiments.
+
+* Out-of-fold classification and fairness evaluation.
+
+* Dataset-specific configuration files and entry points.
+
+* A shared modelling and evaluation workflow.
+
+* Prediction generation for new unlabelled datasets.
+
+* Timestamped experiment reports and separate scoreboards.
+
+For COMPAS, the leading reported Week 7 models were AdaBoost and Gradient Boosting, with ROC-AUC values of approximately 0.727. In Week 8, XGBoost achieved nested-CV ROC-AUC values of 0.725 with feature selection and 0.726 without feature selection. The selector reduced the feature set from 12 to 3, and the corrected paired test found no statistically significant difference between the two configurations based on the rounded outer-fold scores (p = 0.7174).
+
+In Week 9, the pipeline was extended to Adult Income using a separate configuration and entry point. The XGBoost model achieved ROC-AUC of 0.908, accuracy of 0.861 and class 1 F1-score of 0.671, meeting all three target scores. Predictions were generated and validated for all 2,000 observations in adult_new.csv.
+
+The project now demonstrates that the same core pipeline can be reused across different datasets while keeping dataset-specific assumptions, preprocessing decisions, evaluation settings and outputs separate.
