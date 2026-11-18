@@ -75,6 +75,8 @@ The pipeline is being improved incrementally throughout the practical classes.
 | **7** | Model comparison, nested tuning and model selection | Expanded the comparison to include Naive Bayes, Gradient Boosting and HistGradientBoosting, alongside the previously evaluated models. Used ROC-AUC as the primary selection metric, compared untuned and tuned performance using nested cross-validation where tuning is available, and included a Dummy Classifier floor as a baseline. Continued to keep the test set locked during model selection. |
 | **8** | XGBoost and feature selection | Added XGBoost and a voting-based feature selector. Compared tuned XGBoost models with and without feature selection using nested cross-validation and a corrected paired test. Feature selection retained 3 of the 12 available features with very similar validation performance. |
 | **9** | Beyond COMPAS: Adult Income and reusable pipeline | Extended the pipeline to a second dataset using a separate configuration and entry point. Generalised the fairness report, handled Adult-specific missing values and feature decisions, and generated predictions for 2,000 unlabelled observations. |
+| **10** | Configurable imputation and model persistence | Added configurable numerical imputation strategies (Median, KNN, Iterative and Random Forest), compared their performance using 5-fold cross-validation and corrected paired tests, selected Median, and implemented model saving and prediction on new unlabelled data. |
+
 
 ### Week 2 - Baseline
 
@@ -367,6 +369,55 @@ The generated file is results_adult/adult_predictions.csv. It contains the origi
 #### Hardest Assumption and What Led to the Traget Scores
 
 The hardest assumption was deciding how to interpret the Adult dataset's variables without introducing unnecessary information or removing potentially useful features. In particular, fnlwgt is a census sampling weight rather than a personal characteristic, education overlaps with education_num, and race was reserved for fairness analysis while sex remained a model feature. Keeping the anonymised variables and handling missingness explicitly allowed the model to use the available information without relying on arbitrary feature removal. The configured XGBoost model, together with target encoding, standard scaling and the imputation strategy, achieved ROC-AUC of 0.908, accuracy of 0.861 and class 1 F1-score of 0.671, meeting all three target scores without hyperparameter tuning.
+
+### Week 10 - Configurable Imputation and Model Persistence
+
+Week 10 was implemented using the **Adult Income dataset**, building on the reusable pipeline developed in Week 9. The imputation experiments and the model persistence and prediction workflow were therefore tested through `main_adult.py` and `config_adult.yaml`, rather than through the original COMPAS entry point. This allowed the new functionality to be validated in the second dataset supported by the project.
+
+The main focus was making numerical imputation configurable, comparing alternative strategies, and extending the pipeline to save fitted models and generate predictions on new, unlabelled datasets.
+
+#### Missing-value imputation
+
+Four numerical imputation strategies were evaluated: Median, KNN, Iterative and Random Forest. All experiments used the same XGBoost model, five-fold stratified cross-validation, and ROC-AUC as the primary selection metric. The same dataset, model hyperparameters and validation procedure were maintained across experiments to make the comparison consistent.
+
+The results were:
+
+| Imputation strategy | Mean ROC-AUC | Standard deviation |
+|---|---:|---:|
+| **Median** | **0.908** | 0.018 |
+| KNN | 0.907 | 0.018 |
+| Iterative | 0.906 | 0.019 |
+| Random Forest | 0.907 | 0.019 |
+
+Median achieved the highest mean ROC-AUC, although the differences between the four strategies were very small.
+
+Corrected paired tests were performed to compare the fold-level ROC-AUC scores. None of the pairwise comparisons reached statistical significance at the 5% level (all p-values > 0.05). These results should be interpreted as approximate because the available fold scores were rounded to three decimal places.
+
+Overall, Median was selected because it achieved the highest average ROC-AUC while being simpler and computationally more efficient than the alternative strategies. The results did not provide sufficient statistical evidence to establish that it was superior to the other imputers.
+
+#### Saving and predicting on new data
+
+The pipeline now saves the fitted model to the path configured through `output.model_path`. The `models/` directory is excluded from Git using `.gitignore`.
+
+The new prediction module, `src/predict.py`, loads the saved pipeline and applies the same preprocessing steps to new unlabelled data.
+
+For the Adult Income dataset, predictions were generated using:
+
+```bash
+python -m src.predict data/adult_new.csv predictions.csv
+```
+
+The command generates predictions using the saved pipeline and writes them to `predictions.csv`.
+
+The output contains:
+
+- `id`: the original identifier of each observation.
+- `probability`: the predicted probability of belonging to class 1.
+- `prediction`: the predicted class using the configured classification threshold.
+
+The prediction workflow was tested on all 2,000 observations in `adult_new.csv`, confirming that every input row receives a prediction.
+
+The pipeline also generates `results_adult/adult_predictions.csv` when run through `main_adult.py`.
 
 ## Preprocessing
 
@@ -882,7 +933,7 @@ data/adult_new.csv
 
 ## Project Status
 
-**Current stage: Week 9 - Beyond COMPAS: Adult income**
+**Current stage: Week 10 - Configurable Imputation and Model Persistence**
 
 The project has progressed from a simple baseline to a more comprehensive predictive pipeline incorporating:
 
@@ -914,8 +965,20 @@ The project has progressed from a simple baseline to a more comprehensive predic
 
 * Timestamped experiment reports and separate scoreboards.
 
+* Configurable numerical imputation strategies (Median, KNN, Iterative and Random Forest).
+
+* Corrected paired statistical comparisons between imputation strategies.
+
+* Saving fitted pipelines for later reuse.
+
+* Prediction on new unlabelled datasets using the saved pipeline.
+
+* Validation that all input rows are preserved during prediction.
+
 For COMPAS, the leading reported Week 7 models were AdaBoost and Gradient Boosting, with ROC-AUC values of approximately 0.727. In Week 8, XGBoost achieved nested-CV ROC-AUC values of 0.725 with feature selection and 0.726 without feature selection. The selector reduced the feature set from 12 to 3, and the corrected paired test found no statistically significant difference between the two configurations based on the rounded outer-fold scores (p = 0.7174).
 
 In Week 9, the pipeline was extended to Adult Income using a separate configuration and entry point. The XGBoost model achieved ROC-AUC of 0.908, accuracy of 0.861 and class 1 F1-score of 0.671, meeting all three target scores. Predictions were generated and validated for all 2,000 observations in adult_new.csv.
 
 The project now demonstrates that the same core pipeline can be reused across different datasets while keeping dataset-specific assumptions, preprocessing decisions, evaluation settings and outputs separate.
+
+In Week 10, numerical imputation became configurable and four strategies were compared using cross-validation and corrected paired tests. Median was selected based on its slightly higher average ROC-AUC and lower computational complexity. The pipeline was also extended to save fitted models and generate predictions on new unlabelled data, preserving all 2,000 input observations in the Adult prediction experiment.

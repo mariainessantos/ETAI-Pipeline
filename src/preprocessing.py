@@ -17,7 +17,9 @@ from sklearn.preprocessing import (
     OneHotEncoder, OrdinalEncoder, TargetEncoder, StandardScaler, MinMaxScaler, RobustScaler,
 )
 from category_encoders import CountEncoder
-
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.experimental import enable_iterative_imputer  
+from sklearn.impute import IterativeImputer, KNNImputer
 
 def flag_invalid_values(df: pd.DataFrame, rules: dict) -> pd.DataFrame:
     """
@@ -176,34 +178,98 @@ _ENCODERS = {
     "target": lambda seed: TargetEncoder(target_type="binary", cv=StratifiedKFold(5, shuffle=True, random_state=seed)),
 }
 
+_NUMERIC_IMPUTERS = {
+    "median": lambda cfg, seed: SimpleImputer(strategy="median"),
+
+    "mean": lambda cfg, seed: SimpleImputer(strategy="mean"),
+
+    "knn": lambda cfg, seed: KNNImputer(
+        n_neighbors=cfg.get("n_neighbors", 5)
+    ),
+
+    "iterative": lambda cfg, seed: IterativeImputer(
+        max_iter=cfg.get("max_iter", 10),
+        random_state=seed
+    ),
+
+    "random_forest": lambda cfg, seed: IterativeImputer(
+        estimator=RandomForestRegressor(
+            n_estimators=cfg.get("n_estimators", 50),
+            min_samples_leaf=5,
+            random_state=seed,
+            n_jobs=-1
+        ),
+        max_iter=cfg.get("max_iter", 10),
+        random_state=seed
+    ),
+}
+
 
 def build_preprocessor(preprocessing_config: dict) -> ColumnTransformer:
     """
-    Factory: builds a leak-safe ColumnTransformer for the chosen encoder/scaler pair --
-    read from `config.yaml`'s `preprocessing` section (chosen there, not hardcoded
-    here). Every encoder tolerates unseen
-    categories at transform time. Nothing is fit here: fitting happens later, on the
-    training part of each CV fold only, because this object is placed *inside* the
-    model's sklearn Pipeline (see main.py).
+    Builds the unfitted ColumnTransformer described by preprocessing_config.
+    Scaling and imputation for numeric columns, imputation and encoding
+    for categorical columns, and missingness flags passed through.
     """
+
     imputation = preprocessing_config.get("imputation", {})
+
     scaler_factory = _SCALERS[preprocessing_config["scaler"]]
     scaler = scaler_factory() if callable(scaler_factory) else scaler_factory
-    encoder = _ENCODERS[preprocessing_config["encoder"]](preprocessing_config.get("random_state"))
+
+    encoder = _ENCODERS[preprocessing_config["encoder"]](
+        preprocessing_config.get("random_state")
+    )
+
+    numeric_strategy = imputation.get("numeric_strategy", "median")
+
+    if numeric_strategy not in _NUMERIC_IMPUTERS:
+        raise ValueError(
+            f"Unknown numeric_strategy: {numeric_strategy}. "
+            f"Options: {list(_NUMERIC_IMPUTERS)}"
+        )
 
     numeric_pipeline = Pipeline([
-        ("impute", SimpleImputer(strategy=imputation.get("numeric_strategy", "median"))),
         ("scale", scaler),
+        (
+            "impute",
+            _NUMERIC_IMPUTERS[numeric_strategy](
+                imputation,
+                preprocessing_config.get("random_state")
+            )
+        ),
     ])
+
     categorical_pipeline = Pipeline([
-        ("impute", SimpleImputer(strategy=imputation.get("categorical_strategy", "most_frequent"))),
+        (
+            "impute",
+            SimpleImputer(
+                strategy=imputation.get(
+                    "categorical_strategy", "most_frequent"
+                )
+            )
+        ),
         ("encode", encoder),
     ])
-    indicator_cols = [f"{c}_was_missing" for c in preprocessing_config.get("mnar_indicator_sources", [])]
+
+    indicator_cols = [
+        f"{c}_was_missing"
+        for c in preprocessing_config.get(
+            "mnar_indicator_sources", []
+        )
+    ]
 
     return ColumnTransformer([
-        ("numeric", numeric_pipeline, preprocessing_config["numeric_features"]),
-        ("categorical", categorical_pipeline, preprocessing_config["categorical_features"]),
+        (
+            "numeric",
+            numeric_pipeline,
+            preprocessing_config["numeric_features"]
+        ),
+        (
+            "categorical",
+            categorical_pipeline,
+            preprocessing_config["categorical_features"]
+        ),
         ("indicators", "passthrough", indicator_cols),
     ])
 

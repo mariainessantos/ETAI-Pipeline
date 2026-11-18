@@ -6,14 +6,16 @@ Load config -> load and clean data -> engineer features -> split data
 -> lock the test set -> cross-validate the complete pipeline
 -> [if tuning enabled: nested CV, then tune on all development rows]
 -> out-of-fold classification and fairness reports
--> refit on all development rows -> predict new data (if configured)
+-> refit on all development rows -> save model -> predict new data
 -> scoreboard + full report.
 """
 
+import os
 import shutil
 import tempfile
 from datetime import datetime
 
+import joblib
 import optuna
 import yaml
 from sklearn.metrics import confusion_matrix, balanced_accuracy_score
@@ -363,6 +365,25 @@ def run_pipeline(config_path: str = "config.yaml"):
         f"Final model: {model_type} refit on all "
         f"{len(X_dev)} development rows."
     )
+
+    # SAVE THE COMPLETE TRAINED PIPELINE
+
+    model_path = config.get("output", {}).get("model_path")
+
+    if model_path:
+        model_dir = os.path.dirname(model_path)
+
+        if model_dir:
+            os.makedirs(model_dir, exist_ok=True)
+
+        # Remove the temporary CV cache reference before serialization.
+        pipeline.memory = None
+
+        joblib.dump(pipeline, model_path)
+
+        print(f"Saved trained pipeline to: {model_path}")
+
+        refit += f"\nSaved trained pipeline: {model_path}"
 
     # GENERATE PREDICTIONS FOR NEW DATA (OPTIONAL)
 

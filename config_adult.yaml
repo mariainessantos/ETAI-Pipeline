@@ -1,3 +1,4 @@
+
 # DATA
 
 data:
@@ -28,9 +29,9 @@ cv:
     - "fbeta_2"
     - "roc_auc"
     - "average_precision"
-  
-  selection_metric: "roc_auc" 
-  n_jobs: 1 
+
+  selection_metric: "roc_auc"
+  n_jobs: 1
 
 # DIAGNOSTICS
 
@@ -107,8 +108,13 @@ preprocessing:
   random_state: 42
 
   imputation:
-    numeric_strategy: "median"
+    numeric_strategy: "random_forest"
     categorical_strategy: "most_frequent"
+    n_neighbors: 5
+    max_iter: 10
+    n_estimators: 50
+
+# FEATURE SELECTION
 
 feature_selection:
   enabled: false
@@ -121,41 +127,43 @@ feature_selection:
       low: 1
       high: 3
 
-model: 
+# MODEL
+
+model:
   # Available models:
   # "dummy", "logistic_regression", "naive_bayes", "decision_tree",
   # "random_forest", "oblique_random_forest", "adaboost",
   # "gradient_boosting", "hist_gradient_boosting", "xgboost"
-  
-  type: "xgboost"  
-  
+
+  type: "xgboost"
+
   params:
-  
+
     # DECISION TREE
-    #max_depth: 5
-    #random_state: 42
-    #min_samples_leaf: 10 #opt
-    #min_samples_split: 20 #opt
+    # max_depth: 5
+    # random_state: 42
+    # min_samples_leaf: 10
+    # min_samples_split: 20
 
     # RANDOM FOREST
-    #n_estimators: 100
-    #max_depth: 5
-    #min_samples_split: 20
-    #random_state: 42
+    # n_estimators: 100
+    # max_depth: 5
+    # min_samples_split: 20
+    # random_state: 42
 
     # LOGISTIC REGRESSION
-    #max_iter: 2000
-    #random_state: 42
+    # max_iter: 2000
+    # random_state: 42
 
     # DUMMY MODEL
-    #strategy: "most_frequent"  # "stratified", "uniform", "constant"
-    #random_state: 42
+    # strategy: "most_frequent"
+    # random_state: 42
 
     # ADABOOST
-    #n_estimators: 100
-    #learning_rate: 0.1
-    #max_depth: 3
-    #random_state: 42
+    # n_estimators: 100
+    # learning_rate: 0.1
+    # max_depth: 3
+    # random_state: 42
 
     # XGBOOST
     n_estimators: 300
@@ -164,11 +172,14 @@ model:
     random_state: 42
     n_jobs: 1
 
+# TUNING
+
 tuning:
   enabled: false
   n_trials: 10
   n_splits: 3
   random_state: 42
+
   search_spaces:
     logistic_regression:
       model__C:
@@ -176,7 +187,7 @@ tuning:
         low: 0.01
         high: 10.0
         log: true
-    
+
     decision_tree:
       model__max_depth:
         type: int
@@ -190,7 +201,7 @@ tuning:
       model__criterion:
         type: categorical
         choices: ["gini", "entropy"]
-    
+
     random_forest:
       model__n_estimators:
         type: int
@@ -336,8 +347,11 @@ tuning:
         low: 0.0
         high: 5.0
 
+# OUTPUT
+
 output:
   results_dir: "results_adult"
   scoreboard: "results_adult/runs.csv"
   predictions_path: "results_adult/adult_predictions.csv"
   prediction_threshold: 0.5
+  model_path: "models/model.joblib"

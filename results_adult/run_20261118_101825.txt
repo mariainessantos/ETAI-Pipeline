@@ -1,0 +1,84 @@
+Run: 20261118_101825
+Model: xgboost  params={'n_estimators': 300, 'learning_rate': 0.05, 'max_depth': 4, 'random_state': 42, 'n_jobs': 1}
+Preprocessing: encoder=target  scaler=standard
+CV: 5 stratified folds  shuffle=True  random_state=42
+Metrics: accuracy, balanced_accuracy, precision, recall, f1, fbeta_2, roc_auc, average_precision  selection metric: roc_auc
+Feature selection: off
+Tuning: off
+Locked test set: size=0.2  random_state=42  (not evaluated)
+============================================================
+
+Hyperparameters from configuration: {'n_estimators': 300, 'learning_rate': 0.05, 'max_depth': 4, 'random_state': 42, 'n_jobs': 1}
+
+Cross-validation (5 stratified folds, selection metric: roc_auc)
+
+ fold  train  validation   gap  accuracy  balanced_accuracy  precision  recall    f1  fbeta_2  roc_auc  average_precision
+    1  0.974       0.908 0.066     0.865              0.776      0.777   0.607 0.681    0.635    0.908              0.793
+    2  0.978       0.904 0.074     0.842              0.722      0.764   0.491 0.598    0.529    0.904              0.767
+    3  0.973       0.933 0.040     0.886              0.805      0.842   0.648 0.732    0.679    0.933              0.838
+    4  0.980       0.880 0.100     0.838              0.740      0.706   0.552 0.620    0.577    0.880              0.752
+    5  0.976       0.909 0.066     0.866              0.785      0.767   0.630 0.692    0.654    0.909              0.796
+
+Metric means and standard deviations:
+                   mean   std
+accuracy          0.859 0.020
+balanced_accuracy 0.765 0.034
+precision         0.771 0.048
+recall            0.586 0.064
+f1                0.665 0.055
+fbeta_2           0.615 0.061
+roc_auc           0.907 0.019
+average_precision 0.789 0.033
+
+roc_auc: train-validation gap mean = +0.069
+
+No-model floor (dummy, same folds): roc_auc = 0.500
+
+Out-of-fold predictions, development set (threshold 0.5):
+
+        predicted 0  predicted 1
+true 0         3451          200
+true 1          476          673
+
+              precision    recall  f1-score   support
+
+           0       0.88      0.95      0.91      3651
+           1       0.77      0.59      0.67      1149
+
+    accuracy                           0.86      4800
+   macro avg       0.82      0.77      0.79      4800
+weighted avg       0.85      0.86      0.85      4800
+
+False positive rate by race (development set, out-of-fold)
+(share of actual negatives predicted as positive)
+Model classification threshold: 0.5
+
+  Our model:
+    Amer-Indian-Eskimo   FPR = 0.03 (n=38)
+    Asian-Pac-Islander   FPR = 0.12 (n=107)
+    Black                FPR = 0.03 (n=387)
+    Other                FPR = 0.00 (n=39)
+    White                FPR = 0.06 (n=3080)
+
+
+Confusion matrix (out-of-fold predictions):
+ Predicted
+          0       1
+Actual 0  3451    200
+Actual 1  476     673
+
+OOF balanced accuracy: 0.765
+Final model: xgboost refit on all 4800 development rows.
+Saved trained pipeline: models/model.joblib
+New data predictions: 2000 rows generated.
+
+Locked test set: 1200 rows set aside, not evaluated. Development set: 4800 rows.
+
+Scoreboard:
+            run   model  tuned feature_selection  roc_auc   std  untuned  floor
+20261111_092006 xgboost  False               off    0.908 0.018    0.908  0.500
+20261111_092327 xgboost  False               off    0.908 0.018    0.908  0.500
+20261118_100135 xgboost  False               off    0.908 0.018    0.908  0.500
+20261118_101825 xgboost  False               off    0.907 0.019    0.907  0.500
+20261118_101605 xgboost  False               off    0.907 0.018    0.907  0.500
+20261118_101716 xgboost  False               off    0.906 0.019    0.906  0.500
