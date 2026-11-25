@@ -1,8 +1,8 @@
 
 """
 Evaluation on the development set: stratified k-fold cross-validation of the
-whole pipeline on several metrics, out-of-fold probabilities and reports,
-a fairness check and a paired comparison of two models.
+whole pipeline on several metrics, out-of-fold probabilities and anomaly
+scores, reports, a fairness check and a paired comparison of two models.
 
 The locked test set is never used here.
 """
@@ -59,22 +59,19 @@ def cross_validate_pipeline(
     """
     Fit a fresh copy of the entire pipeline on each training fold.
 
-    Preprocessing is fitted within each fold, preventing the validation
-    fold from influencing its own imputation, encoding or scaling.
+    Preprocessing and anomaly detection are fitted within each fold,
+    preventing the validation fold from influencing its own scores.
 
     Returns:
         fold_scores:
-            One row per fold, containing:
-            - train: training score for selection_metric
-            - validation: validation score for selection_metric
-            - gap: train minus validation score
-            - one validation-score column for every configured metric
+            One row per fold, containing training and validation metrics.
 
         oof_proba:
             Out-of-fold probability of the positive class for each row.
-            Each row is predicted by a model that did not train on it.
 
-    Requires a CV splitter that validates each row exactly once.
+        oof_anomaly:
+            Out-of-fold anomaly score for each row.
+            NaN when anomaly detection is disabled.
     """
     if selection_metric not in scorers:
         raise ValueError(
@@ -108,16 +105,30 @@ def cross_validate_pipeline(
         fold_scores[name] = scores[f"test_{name}"]
 
     oof_proba = np.empty(len(X), dtype=float)
+    oof_anomaly = np.full(len(X), np.nan)
 
     for model, val_idx in zip(
         scores["estimator"],
         scores["indices"]["test"],
     ):
+        X_val = X.iloc[val_idx]
+
         oof_proba[val_idx] = model.predict_proba(
-            X.iloc[val_idx]
+            X_val
         )[:, 1]
 
-    return fold_scores, oof_proba
+        if "anomaly" in model.named_steps:
+            X_transformed = model.named_steps["prep"].transform(
+                X_val
+            )
+
+            anomaly_scores = model.named_steps["anomaly"].transform(
+                X_transformed
+            )[:, -1]
+
+            oof_anomaly[val_idx] = anomaly_scores
+
+    return fold_scores, oof_proba, oof_anomaly
 
 
 def cv_report(
@@ -138,14 +149,14 @@ def cv_report(
         "",
         fold_scores.to_string(
             index=False,
-            float_format=lambda value: f"{value:.3f}",
+            float_format=lambda value: f"{value:.6f}",
         ),
         "",
         "Metric means and standard deviations:",
         fold_scores[metrics]
         .agg(["mean", "std"])
         .T
-        .to_string(float_format=lambda value: f"{value:.3f}"),
+        .to_string(float_format=lambda value: f"{value:.6f}"),
         (
             f"\n{selection_metric}: "
             f"train-validation gap mean = "
@@ -277,7 +288,6 @@ def fairness_report(
         np.asarray(oof_proba) >= threshold
     ).astype(int)
 
-    # Include the COMPAS comparison only when score_text exists.
     comparisons = [
         ("Our model", "y_pred_model")
     ]

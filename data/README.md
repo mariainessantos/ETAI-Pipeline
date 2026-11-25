@@ -76,6 +76,7 @@ The pipeline is being improved incrementally throughout the practical classes.
 | **8** | XGBoost and feature selection | Added XGBoost and a voting-based feature selector. Compared tuned XGBoost models with and without feature selection using nested cross-validation and a corrected paired test. Feature selection retained 3 of the 12 available features with very similar validation performance. |
 | **9** | Beyond COMPAS: Adult Income and reusable pipeline | Extended the pipeline to a second dataset using a separate configuration and entry point. Generalised the fairness report, handled Adult-specific missing values and feature decisions, and generated predictions for 2,000 unlabelled observations. |
 | **10** | Configurable imputation and model persistence | Added configurable numerical imputation strategies (Median, KNN, Iterative and Random Forest), compared their performance using 5-fold cross-validation and corrected paired tests, selected Median, and implemented model saving and prediction on new unlabelled data. |
+| **11** | Anomaly detection and predictive performance | Added configurable Isolation Forest and Local Outlier Factor anomaly scoring inside the preprocessing pipeline. Compared both methods with a no-anomaly baseline using identical five-fold cross-validation, corrected paired tests and out-of-fold anomaly analysis. Found no predictive improvement from adding anomaly scores, although Isolation Forest identified a small group with a higher reoffending rate. |
 
 
 ### Week 2 - Baseline
@@ -421,23 +422,99 @@ The pipeline also generates `results_adult/adult_predictions.csv` when run throu
 
 ### Week 11 - Anomaly Detection and Predictive Performance
 
-Before running the anomaly detection experiments, my initial hypothesis is that adding an anomaly score may have a limited effect on COMPAS predictive performance.
+Week 11 investigated whether anomaly detection could provide additional predictive information for the COMPAS two-year recidivism task.
 
-I expect that individuals who reoffend will not necessarily be statistical outliers. Recidivism is likely to be associated with several factors, including age and prior criminal history, but these characteristics do not necessarily make an individual unusual compared with the rest of the dataset.
+#### Hypothesis
 
-Anomaly detection may identify individuals with unusual combinations of characteristics, but being an outlier does not automatically mean that someone is more likely to reoffend.
+My initial hypothesis was that adding an anomaly score would have a limited effect on predictive performance.
 
-Therefore, I expect the anomaly score to provide limited additional predictive information, potentially resulting in similar ROC-AUC performance rather than a substantial improvement.
+Individuals who reoffend are not necessarily statistical outliers. Although recidivism may be associated with characteristics such as age and prior criminal history, these characteristics do not necessarily make an individual unusual compared with the rest of the dataset.
 
-To investigate this, I will compare the reoffending rate among the most unusual individuals (the top 5% by anomaly score) with the rate among everyone else. I will also compare three preprocessing configurations using the same model and validation procedure:
+Anomaly detection can identify observations with unusual combinations of features, but being an outlier does not automatically imply a higher likelihood of reoffending.
 
-- No anomaly detection (none).
+I therefore expected that anomaly scores might identify some groups with different reoffending rates without necessarily improving the model's overall ability to distinguish between individuals who reoffend and those who do not.
 
-- Isolation Forest (isolation_forest).
+#### Experimental Design
 
-- Local Outlier Factor (lof).
+Three configurations were compared:
 
-This will help determine whether unusual observations contain useful information for predicting two-year recidivism and whether incorporating an anomaly score improves model performance.
+- **None:** No anomaly detection was applied.
+- **Isolation Forest:** Added an anomaly score using Isolation Forest.
+- **Local Outlier Factor (LOF):** Added an anomaly score using Local Outlier Factor with 20 neighbours.
+
+The anomaly detector was integrated into the preprocessing pipeline. This ensured that it was fitted only on the training portion of each cross-validation fold, avoiding information leakage from validation observations.
+
+All three experiments used the same:
+
+- XGBoost model and hyperparameters.
+- Five-fold stratified cross-validation, with shuffling and random state 42.
+- Preprocessing configuration, including target encoding and standard scaling.
+- Development dataset of 5,771 observations.
+- Locked test set of 1,443 observations, which remained unused.
+- ROC-AUC as the primary selection metric.
+
+Hyperparameter tuning and feature selection were disabled. The only experimental variable was the anomaly detection method.
+
+The XGBoost model used 300 estimators, a learning rate of 0.05, maximum depth of 4 and random state 42.
+
+#### Predictive Performance
+
+The results were:
+
+| Anomaly method | Mean ROC-AUC | Standard deviation |
+|---|---:|---:|
+| **None** | **0.722647** | 0.017792 |
+| Isolation Forest | 0.716768 | 0.016226 |
+| Local Outlier Factor | 0.719103 | 0.014091 |
+
+The configuration without anomaly detection achieved the highest mean ROC-AUC. Both anomaly detection methods produced slightly lower average performance.
+
+To assess whether these differences were consistent across folds, corrected paired t-tests were performed using the five fold-level ROC-AUC scores. The test/train ratio was 0.25, corresponding to the validation-to-training size ratio in five-fold cross-validation.
+
+| Comparison (A − B) | Mean ROC-AUC difference | A wins | t-statistic | p-value |
+|---|---:|---:|---:|---:|
+| None − Isolation Forest | +0.005879 | 5/5 | 5.109 | **0.0069** |
+| None − LOF | +0.003544 | 4/5 | 1.115 | 0.3273 |
+| Isolation Forest − LOF | −0.002335 | 1/5 | −0.911 | 0.4137 |
+
+The comparison between no anomaly detection and Isolation Forest was statistically significant at the 5% level (p = 0.0069). The configuration without anomaly detection achieved a higher ROC-AUC in all five folds.
+
+The other two comparisons were not statistically significant. Therefore, there was insufficient evidence to conclude that the differences between those configurations reflected a consistent performance difference.
+
+These tests are based on only five folds and should be interpreted cautiously. The reported p-values are not adjusted for multiple comparisons. The fold scores used in the calculations were taken to six decimal places.
+
+#### Reoffending Rate Among the Most Unusual Individuals
+
+In addition to predictive performance, I investigated whether the individuals identified as most unusual had a different reoffending rate.
+
+For each anomaly detection method, out-of-fold anomaly scores were collected. Each individual was scored using a detector fitted on the corresponding training folds, rather than on that individual's validation fold.
+
+The top 5% of individuals with the highest anomaly scores were then compared with the remaining 95%.
+
+| Anomaly method | Top 5% most unusual | Remaining 95% | Difference |
+|---|---:|---:|---:|
+| Isolation Forest | **71.3%** | 43.7% | +27.6 percentage points |
+| Local Outlier Factor | **53.6%** | 44.6% | +9.0 percentage points |
+
+Isolation Forest identified a group of 289 individuals with a reoffending rate of 71.3%, compared with 43.7% among the remaining 5,482 individuals.
+
+LOF also identified a group with a higher reoffending rate, although the difference was smaller: 53.6% compared with 44.6%.
+
+These results suggest that unusual combinations of characteristics may be associated with different reoffending rates. However, this is an exploratory association, not evidence that being an outlier causes reoffending or that anomaly detection provides a reliable individual risk assessment.
+
+The anomaly scores were generated by different fold-specific detectors, so their scales may vary between folds. The pooled ranking across folds should therefore also be interpreted as exploratory.
+
+#### Conclusion
+
+The results partially supported the initial hypothesis.
+
+Adding anomaly detection did not improve overall predictive performance. The configuration without anomaly detection achieved the highest mean ROC-AUC (0.722647), and its advantage over Isolation Forest was statistically significant in the corrected paired comparison. The difference compared with LOF was not statistically significant.
+
+Nevertheless, the anomaly analysis revealed an interesting distinction between the two methods. Isolation Forest identified a small group with a substantially higher reoffending rate, whereas LOF showed a more modest difference.
+
+This illustrates that anomaly detection may help identify unusual subgroups without necessarily improving the predictive performance of a classification model.
+
+Overall, anomaly detection was not retained as a default component of the COMPAS pipeline. The default configuration remains `none`, while Isolation Forest and LOF remain available as optional methods for further experimentation.
 
 ## Preprocessing
 
@@ -953,7 +1030,7 @@ data/adult_new.csv
 
 ## Project Status
 
-**Current stage: Week 10 - Configurable Imputation and Model Persistence**
+**Current stage: Week 11 - Anomaly Detection and Predictive Performance**
 
 The project has progressed from a simple baseline to a more comprehensive predictive pipeline incorporating:
 
@@ -995,6 +1072,14 @@ The project has progressed from a simple baseline to a more comprehensive predic
 
 * Validation that all input rows are preserved during prediction.
 
+* Configurable anomaly scoring using Isolation Forest and Local Outlier Factor.
+
+* Leak-safe anomaly detection fitted separately within each training fold.
+
+* Corrected paired statistical comparisons between anomaly detection configurations.
+
+* Out-of-fold anomaly analysis comparing reoffending rates among the top 5% most unusual individuals.
+
 For COMPAS, the leading reported Week 7 models were AdaBoost and Gradient Boosting, with ROC-AUC values of approximately 0.727. In Week 8, XGBoost achieved nested-CV ROC-AUC values of 0.725 with feature selection and 0.726 without feature selection. The selector reduced the feature set from 12 to 3, and the corrected paired test found no statistically significant difference between the two configurations based on the rounded outer-fold scores (p = 0.7174).
 
 In Week 9, the pipeline was extended to Adult Income using a separate configuration and entry point. The XGBoost model achieved ROC-AUC of 0.908, accuracy of 0.861 and class 1 F1-score of 0.671, meeting all three target scores. Predictions were generated and validated for all 2,000 observations in adult_new.csv.
@@ -1002,3 +1087,5 @@ In Week 9, the pipeline was extended to Adult Income using a separate configurat
 The project now demonstrates that the same core pipeline can be reused across different datasets while keeping dataset-specific assumptions, preprocessing decisions, evaluation settings and outputs separate.
 
 In Week 10, numerical imputation became configurable and four strategies were compared using cross-validation and corrected paired tests. Median was selected based on its slightly higher average ROC-AUC and lower computational complexity. The pipeline was also extended to save fitted models and generate predictions on new unlabelled data, preserving all 2,000 input observations in the Adult prediction experiment.
+
+In Week 11, anomaly detection was evaluated on COMPAS using Isolation Forest and Local Outlier Factor. Neither method improved predictive performance over the configuration without anomaly detection. The no-anomaly configuration achieved the highest mean ROC-AUC (0.722647), with a statistically significant advantage over Isolation Forest (corrected paired test, p = 0.0069). However, Isolation Forest identified a top 5% group with a reoffending rate of 71.3%, compared with 43.7% among the remaining individuals. These findings suggest that anomaly detection can reveal potentially interesting subgroups without necessarily improving overall classification performance. The default COMPAS configuration therefore remains set to no anomaly detection.

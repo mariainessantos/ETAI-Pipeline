@@ -21,7 +21,7 @@ from sklearn.tree import DecisionTreeClassifier
 
 from xgboost import XGBClassifier
 
-from src.preprocessing import build_preprocessor
+from src.preprocessing import AnomalyScore, build_preprocessor
 
 def adaboost(max_depth: int = 1, **params):
     """
@@ -123,21 +123,23 @@ def build_pipeline(
     preprocessing_config: dict,
     model_config: dict,
     selection_config: dict = None,
-    memory=None
+    memory=None,
+    anomaly_config: dict = None
 ) -> Pipeline:
-    """
-    Builds the complete pipeline:
-
-    preprocessing -> optional feature selection -> model
-
-    Learned steps are fitted within each cross-validation fold.
-    Memory caching avoids repeating preprocessing and selection
-    when tuning different model configurations.
-    """
 
     steps = [
         ("prep", build_preprocessor(preprocessing_config))
     ]
+
+    if anomaly_config and anomaly_config.get("method", "none") != "none":
+        steps.append((
+            "anomaly",
+            AnomalyScore(
+                method=anomaly_config["method"],
+                n_neighbors=anomaly_config.get("n_neighbors", 20),
+                random_state=anomaly_config.get("random_state")
+            )
+        ))
 
     if selection_config and selection_config.get("enabled", False):
         steps.append((

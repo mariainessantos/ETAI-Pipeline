@@ -93,6 +93,11 @@ feature_selection:
   min_votes: 2
   random_state: 42
 
+anomaly:
+  method: "lof"  # Options: none, isolation_forest, lof
+  n_neighbors: 20
+  random_state: 42
+
   search_space:
     select__min_votes:
       type: int

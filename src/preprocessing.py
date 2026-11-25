@@ -20,6 +20,9 @@ from category_encoders import CountEncoder
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.experimental import enable_iterative_imputer  
 from sklearn.impute import IterativeImputer, KNNImputer
+from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.ensemble import IsolationForest
+from sklearn.neighbors import LocalOutlierFactor
 
 def flag_invalid_values(df: pd.DataFrame, rules: dict) -> pd.DataFrame:
     """
@@ -274,6 +277,68 @@ def build_preprocessor(preprocessing_config: dict) -> ColumnTransformer:
     ])
 
 
+class AnomalyScore(TransformerMixin, BaseEstimator):
+    """
+    Appends one column, `anomaly_score`, to the preprocessed features:
+    how unusual each row is compared with the training rows (higher = more unusual).
+
+    Supported methods:
+    - isolation_forest
+    - lof
+
+    The detector is fitted on training rows only and then scores new rows.
+    """
+
+    def __init__(self, method: str = "isolation_forest",
+                 n_neighbors: int = 20, random_state=None):
+        self.method = method
+        self.n_neighbors = n_neighbors
+        self.random_state = random_state
+
+    def fit(self, X, y=None):
+        if self.method == "isolation_forest":
+            self.detector_ = IsolationForest(
+                random_state=self.random_state
+            )
+        elif self.method == "lof":
+            self.detector_ = LocalOutlierFactor(
+                n_neighbors=self.n_neighbors,
+                novelty=True
+            )
+        else:
+            raise ValueError(
+                f"Unknown anomaly method: {self.method}. "
+                "Options: isolation_forest, lof"
+            )
+
+        self.detector_.fit(X)
+        self.n_features_in_ = np.asarray(X).shape[1]
+        return self
+
+    def fit_transform(self, X, y=None):
+        """Fits on X and scores its training rows."""
+        self.fit(X)
+
+        if self.method == "lof":
+            scores = -self.detector_.negative_outlier_factor_
+            return np.column_stack([X, scores])
+
+        return self.transform(X)
+
+    def transform(self, X):
+        scores = -self.detector_.score_samples(X)
+        return np.column_stack([X, scores])
+
+    def get_feature_names_out(self, input_features=None):
+        if input_features is None:
+            input_features = [
+                f"x{i}" for i in range(self.n_features_in_)
+            ]
+
+        return np.append(
+            np.asarray(input_features, dtype=object),
+            "anomaly_score"
+        )
 
 def split_dev_test(X, y, extras, test_size: float, random_state: int):
     """

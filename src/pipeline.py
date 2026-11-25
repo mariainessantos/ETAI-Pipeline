@@ -14,6 +14,7 @@ import os
 import shutil
 import tempfile
 from datetime import datetime
+import numpy as np
 
 import joblib
 import optuna
@@ -142,17 +143,20 @@ def run_pipeline(config_path: str = "config.yaml"):
         config["preprocessing"],
         config["model"],
         selection_config,
-        memory=cache_dir
+        memory=cache_dir,
+        anomaly_config=config.get("anomaly", {})
     )
+    
 
     floor_pipeline = build_pipeline(
         config["preprocessing"],
-        {"type": "dummy"}
+        {"type": "dummy"},
+        anomaly_config=config.get("anomaly", {})
     )
 
     # BASELINE CROSS-VALIDATION
 
-    floor_scores, _ = cross_validate_pipeline(
+    floor_scores, _, _ = cross_validate_pipeline(
         floor_pipeline,
         X_dev,
         y_dev,
@@ -164,7 +168,7 @@ def run_pipeline(config_path: str = "config.yaml"):
 
     # DEFAULT MODEL CROSS-VALIDATION
 
-    fold_scores, oof_proba = cross_validate_pipeline(
+    fold_scores, oof_proba, oof_anomaly = cross_validate_pipeline(
         pipeline,
         X_dev,
         y_dev,
@@ -176,6 +180,35 @@ def run_pipeline(config_path: str = "config.yaml"):
 
     floor = floor_scores["validation"].mean()
     untuned = fold_scores["validation"].mean()
+
+        # REOFFENDING RATE AMONG THE MOST UNUSUAL PEOPLE
+
+    anomaly_method = config.get("anomaly", {}).get("method", "none")
+
+    if anomaly_method != "none":
+        valid = np.isfinite(oof_anomaly)
+
+        anomaly_scores = oof_anomaly[valid]
+        anomaly_targets = np.asarray(y_dev)[valid]
+
+        n_top = max(1, int(np.ceil(0.05 * len(anomaly_scores))))
+        top_indices = np.argsort(anomaly_scores)[-n_top:]
+
+        top_mask = np.zeros(len(anomaly_scores), dtype=bool)
+        top_mask[top_indices] = True
+
+        top_rate = anomaly_targets[top_mask].mean()
+        remaining_rate = anomaly_targets[~top_mask].mean()
+
+        print("\nAnomaly analysis")
+        print(
+            f"  Top 5% most unusual ({n_top} people): "
+            f"{top_rate:.1%} reoffended"
+        )
+        print(
+            f"  Remaining people ({len(anomaly_scores) - n_top}): "
+            f"{remaining_rate:.1%} reoffended"
+        )
 
     print("\nDefault hyperparameters")
 
@@ -400,9 +433,17 @@ def run_pipeline(config_path: str = "config.yaml"):
 
         all_features = pipeline.named_steps["prep"].get_feature_names_out()
 
-        kept = pipeline.named_steps["select"].get_feature_names_out(
-            all_features
-        )
+        if "anomaly" in pipeline.named_steps:
+            all_features = pipeline.named_steps["anomaly"].get_feature_names_out(
+                all_features
+            )
+
+        if "select" in pipeline.named_steps:
+            kept = pipeline.named_steps["select"].get_feature_names_out(
+                all_features
+            )
+        else:
+             kept = all_features
 
         refit += (
             f"\nFeatures kept: {len(kept)} of {len(all_features)}: "
@@ -437,6 +478,7 @@ def run_pipeline(config_path: str = "config.yaml"):
         "encoder": config["preprocessing"]["encoder"],
         "scaler": config["preprocessing"]["scaler"],
         "feature_selection": selection_setting,
+        "anomaly": config.get("anomaly", {}).get("method", "none"),
         "params": str(config["model"].get("params")),
         "tuned_params": (
             str(study.best_params) if study is not None else ""
@@ -473,6 +515,7 @@ def run_pipeline(config_path: str = "config.yaml"):
                 "model",
                 "tuned",
                 "feature_selection",
+                "anomaly",
                 "mean",
                 "std",
                 "untuned",
