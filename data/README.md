@@ -419,6 +419,26 @@ The prediction workflow was tested on all 2,000 observations in `adult_new.csv`,
 
 The pipeline also generates `results_adult/adult_predictions.csv` when run through `main_adult.py`.
 
+### Week 11 - Anomaly Detection and Predictive Performance
+
+Before running the anomaly detection experiments, my initial hypothesis is that adding an anomaly score may have a limited effect on COMPAS predictive performance.
+
+I expect that individuals who reoffend will not necessarily be statistical outliers. Recidivism is likely to be associated with several factors, including age and prior criminal history, but these characteristics do not necessarily make an individual unusual compared with the rest of the dataset.
+
+Anomaly detection may identify individuals with unusual combinations of characteristics, but being an outlier does not automatically mean that someone is more likely to reoffend.
+
+Therefore, I expect the anomaly score to provide limited additional predictive information, potentially resulting in similar ROC-AUC performance rather than a substantial improvement.
+
+To investigate this, I will compare the reoffending rate among the most unusual individuals (the top 5% by anomaly score) with the rate among everyone else. I will also compare three preprocessing configurations using the same model and validation procedure:
+
+- No anomaly detection (none).
+
+- Isolation Forest (isolation_forest).
+
+- Local Outlier Factor (lof).
+
+This will help determine whether unusual observations contain useful information for predicting two-year recidivism and whether incorporating an anomaly score improves model performance.
+
 ## Preprocessing
 
 The preprocessing decisions were based on the EDA performed in:
